@@ -16,7 +16,8 @@ Design rules for this repo:
 
 ## Conventions
 
-**Branches:** `<type>/<kebab-case-name>`, e.g. `feature/retry-engine`.
+**Branches:** `<type>/<kebab-case-name>`, e.g. `feature/retry-engine`. Release branches carry the version:
+`release/v0.1.0`.
 
 **Commit messages and PR titles:** `[<branch>] - <summary>`, e.g. `[feature/retry-engine] - add sync retries`.
 The tag is always the branch the work belongs to. The summary is English, starts with a lower-case imperative verb,
