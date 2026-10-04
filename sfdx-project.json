@@ -2,12 +2,18 @@
     "packageDirectories": [
         {
             "path": "force-app",
-            "default": true
+            "default": true,
+            "package": "Callwise",
+            "versionName": "v0.1",
+            "versionNumber": "0.1.0.NEXT",
+            "versionDescription": "Resilient REST callouts for Salesforce: idempotency-aware retries, limits budgeting, async backoff, circuit breaker and declarative test mocks."
         }
     ],
     "name": "Callwise",
     "namespace": "",
     "sfdcLoginUrl": "https://login.salesforce.com",
     "sourceApiVersion": "67.0",
-    "packageAliases": {}
+    "packageAliases": {
+        "Callwise": "0HoQy00000027DVKAY"
+    }
 }

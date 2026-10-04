@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - `sendAsync()` and `sendAsync(Type callback)`: one Queueable per attempt with real backoff (`Retry-After`, otherwise
   exponential, at most 10 minutes), the same `Idempotency-Key` on every attempt, the circuit breaker respected, and
   the final outcome delivered to `Callwise.Callback`.
+- Unlocked package `Callwise` (no namespace), version `0.1.0`.
 - `docs/API.md`.
 - Apex tests (187 tests, 98% coverage; the uncovered lines are Platform Cache reads and writes, which need a
   partition, and the enqueue of a chained async attempt, which Apex tests cannot run).
