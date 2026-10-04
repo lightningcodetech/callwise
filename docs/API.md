@@ -1,8 +1,8 @@
 # Callwise API
 
-> Status: **v0.1 in progress.** The public surface below is stable. `send()` currently makes a single attempt;
-> synchronous retries within the limits budget, the circuit breaker and `sendAsync()` land in the next iteration.
-> Sections describing them are marked _(next iteration)_.
+> Status: **v0.1 in progress.** The public surface below is stable. `send()` retries within the limits budget; the
+> circuit breaker and `sendAsync()` land in the next iteration. Sections describing them are marked
+> _(next iteration)_.
 
 ## Goals
 
@@ -121,13 +121,15 @@ See [Testing](#testing).
 **Idempotency first.** Only GET, HEAD, PUT and DELETE are retried. POST and PATCH are retried only with a
 non-blank `Idempotency-Key` header or `allowNonIdempotent()`: a POST that timed out may already have succeeded.
 
-**Synchronous** _(next iteration)_. Apex cannot sleep, and a busy-wait burns CPU time without helping the server.
+**Synchronous.** Apex cannot sleep, and a busy-wait burns CPU time without helping the server.
 Sync retries are therefore immediate and only happen if the next attempt fits in the budget:
 
 - `Limits.getCallouts()` must leave room for another callout, and
 - the request's timeout must fit in what remains of the 120 s cumulative callout time.
 
-If it does not fit, the engine stops and returns the last response (or throws the last failure). A `Retry-After`
+If it does not fit, the engine stops and returns the last response (or throws the last failure). If not even the
+first attempt has a callout left, `send()` throws `LIMIT_BUDGET` without calling out. The platform does not expose
+the cumulative callout time, so Callwise counts only the time spent in its own callouts during the transaction. A `Retry-After`
 greater than 0 disables the sync retry: hammering a server that asked you to wait is worse than failing.
 
 **Asynchronous** _(next iteration)_. `sendAsync()` runs the request in a Queueable with `Database.AllowsCallouts`.
