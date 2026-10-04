@@ -20,8 +20,8 @@ Include, if you can:
   circuit breaker);
 - the steps or Apex code to reproduce it.
 
-You can expect an acknowledgement within 7 days. Once the report is confirmed, the fix is developed in a private
-advisory, released, and the advisory is published with credit to the reporter unless you prefer to stay anonymous.
+Once the report is confirmed, the fix is developed in a private advisory, released, and the advisory is published
+with credit to the reporter unless you prefer to stay anonymous.
 
 ## Scope
 
