@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-04
+
+First release.
+
 ### Added
 
 - Public API surface: `Callwise`, `CallwiseRequest`, `CallwiseResponse`, `CallwiseRetryPolicy`, `CallwiseException`
@@ -23,6 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   exponential, at most 10 minutes), the same `Idempotency-Key` on every attempt, the circuit breaker respected, and
   the final outcome delivered to `Callwise.Callback`.
 - Unlocked package `Callwise` (no namespace), version `0.1.0`.
-- `docs/API.md`.
+- `docs/API.md` (reference) and `docs/design.md` (design decisions).
 - Apex tests (187 tests, 98% coverage; the uncovered lines are Platform Cache reads and writes, which need a
   partition, and the enqueue of a chained async attempt, which Apex tests cannot run).
+
+[Unreleased]: https://github.com/lightningcodetech/callwise/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lightningcodetech/callwise/releases/tag/v0.1.0
