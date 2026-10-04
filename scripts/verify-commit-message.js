@@ -2,8 +2,10 @@
 /*
  * Validates commit messages, pull request titles and branch names.
  *
- *   Branch:          <type>/<kebab-case-name>              e.g. feature/retry-engine
+ *   Branch:          <type>/<kebab-case-name>              e.g. feature/retry-engine, release/v0.1.0
  *   Commit/PR title: [<type>/<kebab-case-name>] - <summary> e.g. [feature/retry-engine] - add sync retries
+ *
+ * Names are lower case; words are separated by "-", and "." is allowed so release branches can carry the version.
  *
  * Usage:
  *   node scripts/verify-commit-message.js <commit-msg-file>                 (husky commit-msg hook)
@@ -13,7 +15,7 @@ const fs = require("fs");
 const { execSync } = require("child_process");
 
 const TYPES = ["feature", "bugfix", "hotfix", "refactor", "test", "docs", "ci", "chore", "release"];
-const NAME = "[a-z0-9]+(?:-[a-z0-9]+)*";
+const NAME = "[a-z0-9]+(?:[-.][a-z0-9]+)*";
 const BRANCH_PATTERN = new RegExp(`^(?:${TYPES.join("|")})/${NAME}$`);
 // The optional " (#123)" suffix is what GitHub appends to squash-merge commits.
 const HEADER_PATTERN = new RegExp(`^\\[((?:${TYPES.join("|")})/${NAME})\\] - ([a-z].*?)(?: \\(#\\d+\\))?$`);
