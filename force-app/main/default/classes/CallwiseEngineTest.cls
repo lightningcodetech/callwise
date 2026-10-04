@@ -70,12 +70,234 @@ private class CallwiseEngineTest {
 
         Test.startTest();
         try {
-            Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+            Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).send();
             Assert.fail('Expected CallwiseException');
         } catch (CallwiseException e) {
             Assert.areEqual(new List<String>{ 'attempt=1 failure=TRANSPORT' }, logger.entries, 'Failure logged');
         }
         Test.stopTest();
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // Synchronous retries
+    // ---------------------------------------------------------------------------------------------------------
+
+    @IsTest
+    static void shouldRetryTransientStatus_UntilSuccess() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenRespond(503, '')
+            .thenRespond(200, 'ok')
+            .install();
+        RecordingLogger logger = installLogger();
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(200, response.getStatusCode(), 'Second attempt should succeed');
+        Assert.areEqual(2, response.getAttempts(), 'Attempts should include the retry');
+        Assert.areEqual(2, mock.countRequests('GET', '/a'), 'Two callouts');
+        Assert.areEqual(
+            new List<String>{ 'attempt=1 status=503', 'attempt=2 status=200' },
+            logger.entries,
+            'Both logged'
+        );
+    }
+
+    @IsTest
+    static void shouldRetryTransportFailure_UntilSuccess() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenThrow('Read timed out')
+            .thenRespond(200, 'ok')
+            .install();
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(200, response.getStatusCode(), 'Retry should recover from the timeout');
+        Assert.areEqual(2, mock.countRequests('GET', '/a'), 'Two callouts');
+    }
+
+    @IsTest
+    static void shouldReturnLastResponse_WhenAttemptsAreExhausted() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL)
+            .get('/a')
+            .retry(CallwiseRetryPolicy.transientErrors().maxAttempts(4))
+            .send();
+        Test.stopTest();
+
+        Assert.areEqual(503, response.getStatusCode(), 'Last response is returned');
+        Assert.areEqual(4, response.getAttempts(), 'Every permitted attempt used');
+        Assert.areEqual(4, mock.countRequests('GET', '/a'), 'One callout per attempt');
+    }
+
+    @IsTest
+    static void shouldThrowHttpError_WhenAttemptsAreExhaustedWithThrowOnError() {
+        new CallwiseMock().whenRequest('GET', '/a').thenRespond(502, '').install();
+
+        Test.startTest();
+        try {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').throwOnError().send();
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(CallwiseException.FailureReason.HTTP_ERROR, e.reason, 'Reason should be HTTP_ERROR');
+            Assert.areEqual(3, e.response.getAttempts(), 'Default policy makes 3 attempts');
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void shouldThrowLastFailure_WhenAttemptsAreExhausted() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenThrow('Connection reset')
+            .thenThrow('Read timed out')
+            .install();
+
+        Test.startTest();
+        try {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(CallwiseException.FailureReason.TIMEOUT, e.reason, 'Last failure is thrown');
+        }
+        Test.stopTest();
+
+        Assert.areEqual(3, mock.countRequests('GET', '/a'), 'Default policy makes 3 attempts');
+    }
+
+    @IsTest
+    static void shouldNotRetry_WhenStatusIsNotRetryable() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(404, '').install();
+
+        Test.startTest();
+        Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(1, mock.countRequests('GET', '/a'), '404 is not retried');
+    }
+
+    @IsTest
+    static void shouldNotRetry_WhenPolicyIsNone() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
+
+        Test.startTest();
+        Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).send();
+        Test.stopTest();
+
+        Assert.areEqual(1, mock.countRequests('GET', '/a'), 'none() makes a single attempt');
+    }
+
+    @IsTest
+    static void shouldNotRetryPost_WithoutIdempotencyKey() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('POST', '/a').thenRespond(503, '').install();
+
+        Test.startTest();
+        Callwise.to(NAMED_CREDENTIAL).post('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(1, mock.countRequests('POST', '/a'), 'POST without Idempotency-Key is not retried');
+    }
+
+    @IsTest
+    static void shouldRetryPost_WithIdempotencyKey() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('POST', '/a')
+            .thenRespond(503, '')
+            .thenRespond(201, '')
+            .install();
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).post('/a').header('Idempotency-Key', 'k-1').send();
+        Test.stopTest();
+
+        Assert.areEqual(201, response.getStatusCode(), 'Retry should succeed');
+        Assert.areEqual(2, mock.countRequests('POST', '/a'), 'POST with Idempotency-Key is retried');
+    }
+
+    @IsTest
+    static void shouldNotRetry_WhenServerAsksToWait() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenRespond(429, '', new Map<String, String>{ 'Retry-After' => '30' })
+            .install();
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(429, response.getStatusCode(), 'Response is returned as is');
+        Assert.areEqual(1, mock.countRequests('GET', '/a'), 'Retry-After > 0 disables the sync retry');
+    }
+
+    @IsTest
+    static void shouldRetry_WhenRetryAfterIsZero() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenRespond(429, '', new Map<String, String>{ 'Retry-After' => '0' })
+            .thenRespond(200, '')
+            .install();
+
+        Test.startTest();
+        Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(2, mock.countRequests('GET', '/a'), 'Retry-After: 0 allows an immediate retry');
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // Limits budget
+    // ---------------------------------------------------------------------------------------------------------
+
+    @IsTest
+    static void shouldStopRetrying_WhenTimeoutDoesNotFitRemainingCalloutTime() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
+        CallwiseEngine.calloutMsUsed = CallwiseEngine.MAX_CALLOUT_TIME_MS - 5000;
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).get('/a').timeout(10000).send();
+        Test.stopTest();
+
+        Assert.areEqual(503, response.getStatusCode(), 'Last response is returned');
+        Assert.areEqual(1, mock.countRequests('GET', '/a'), 'A 10 s retry does not fit in the 5 s left');
+    }
+
+    @IsTest
+    static void shouldStopRetrying_WhenNoCalloutIsLeft() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
+
+        Test.startTest();
+        CallwiseEngine.calloutLimitOverride = Limits.getCallouts() + 1;
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(503, response.getStatusCode(), 'Last response is returned');
+        Assert.areEqual(1, mock.countRequests('GET', '/a'), 'Only one callout was left');
+    }
+
+    @IsTest
+    static void shouldThrowLimitBudget_WhenNoCalloutIsLeftForTheFirstAttempt() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '').install();
+        RecordingLogger logger = installLogger();
+
+        Test.startTest();
+        CallwiseEngine.calloutLimitOverride = Limits.getCallouts();
+        try {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(CallwiseException.FailureReason.LIMIT_BUDGET, e.reason, 'Reason should be LIMIT_BUDGET');
+        }
+        Test.stopTest();
+
+        Assert.areEqual(0, mock.countRequests('GET', '/a'), 'No callout is made');
+        Assert.isTrue(logger.entries.isEmpty(), 'Nothing to log without an attempt');
     }
 
     @IsTest

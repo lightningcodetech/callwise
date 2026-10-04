@@ -1,20 +1,36 @@
 /**
  * Internal: executes CallwiseRequests. Not part of the public API; call CallwiseRequest.send() / sendAsync().
  *
- * Current scope (v0.1 surface iteration): a single synchronous attempt with transport-error translation,
- * logging and throwOnError(). Retries within the limits budget, the circuit breaker and the async Queueable
- * are implemented in the next iteration.
+ * Synchronous sends retry immediately (Apex cannot sleep) while the retry policy allows it and the next attempt
+ * fits in the transaction's limits: one callout from the 100 available, and the request's timeout within what
+ * remains of the 120 s cumulative callout time. The circuit breaker and the async Queueable are implemented in
+ * the next iteration.
  */
 public inherited sharing class CallwiseEngine {
+    /** Cumulative callout time the platform allows per transaction, in milliseconds. */
+    public static final Integer MAX_CALLOUT_TIME_MS = 120000;
+
     private static final String UNCOMMITTED_WORK_MARKER = 'uncommitted work pending';
     private static final String TIMEOUT_MARKER = 'timed out';
 
     /**
-     * Sends the request synchronously.
+     * Callout time consumed by Callwise in this transaction. The platform does not expose the cumulative callout
+     * time, so callouts made outside Callwise are not counted.
+     */
+    @TestVisible
+    private static Long calloutMsUsed = 0;
+
+    /** Replaces Limits.getLimitCallouts() in tests, so the callout budget can be exhausted cheaply. */
+    @TestVisible
+    private static Integer calloutLimitOverride;
+
+    /**
+     * Sends the request synchronously, retrying while the policy and the limits budget allow it.
      *
      * @param request Request to send
      * @return Final response
-     * @throws CallwiseException on transport failures, or HTTP_ERROR when throwOnError() is set
+     * @throws CallwiseException LIMIT_BUDGET when no callout is left for the first attempt, the last failure when
+     *         every permitted attempt failed, or HTTP_ERROR when throwOnError() is set
      */
     public CallwiseResponse send(CallwiseRequest request) {
         if (request == null) {
@@ -23,18 +39,35 @@ public inherited sharing class CallwiseEngine {
                 'Request must not be null.'
             );
         }
-        Integer attempt = 1;
+        if (!hasCalloutLeft()) {
+            throw CallwiseException.create(
+                CallwiseException.FailureReason.LIMIT_BUDGET,
+                'No callouts left in this transaction (' + Limits.getCallouts() + ' used). Use sendAsync().'
+            );
+        }
         Long startedAt = System.currentTimeMillis();
-        HttpResponse rawResponse;
-        try {
-            rawResponse = new Http().send(request.toHttpRequest());
-        } catch (CalloutException e) {
-            CallwiseException failure = translate(e);
-            Callwise.getLogger().log(request, null, failure, attempt);
+        Integer attempt = 0;
+        CallwiseResponse response;
+        CallwiseException failure;
+        do {
+            attempt++;
+            response = null;
+            failure = null;
+            Long attemptStartedAt = System.currentTimeMillis();
+            try {
+                HttpResponse rawResponse = new Http().send(request.toHttpRequest());
+                response = new CallwiseResponse(rawResponse, attempt, System.currentTimeMillis() - startedAt);
+            } catch (CalloutException e) {
+                failure = translate(e);
+            } finally {
+                calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
+            }
+            Callwise.getLogger().log(request, response, failure, attempt);
+        } while (shouldRetry(request, response, failure, attempt));
+
+        if (failure != null) {
             throw failure;
         }
-        CallwiseResponse response = new CallwiseResponse(rawResponse, attempt, System.currentTimeMillis() - startedAt);
-        Callwise.getLogger().log(request, response, null, attempt);
         if (request.isThrowOnError() && !response.isSuccess()) {
             throw CallwiseException.fromResponse(response);
         }
@@ -76,5 +109,27 @@ public inherited sharing class CallwiseEngine {
             return CallwiseException.create(CallwiseException.FailureReason.TIMEOUT, message, calloutError);
         }
         return CallwiseException.create(CallwiseException.FailureReason.TRANSPORT, message, calloutError);
+    }
+
+    private static Boolean shouldRetry(
+        CallwiseRequest request,
+        CallwiseResponse response,
+        CallwiseException failure,
+        Integer attempt
+    ) {
+        CallwiseRetryPolicy policy = request.getRetryPolicy();
+        if (attempt >= policy.getMaxAttempts() || !policy.isRetryable(request, response, failure)) {
+            return false;
+        }
+        // The server asked us to wait and Apex cannot: retrying now would only add load.
+        Long retryAfterSeconds = response?.getRetryAfterSeconds();
+        if (retryAfterSeconds != null && retryAfterSeconds > 0) {
+            return false;
+        }
+        return hasCalloutLeft() && calloutMsUsed + request.getTimeoutMs() <= MAX_CALLOUT_TIME_MS;
+    }
+
+    private static Boolean hasCalloutLeft() {
+        return Limits.getCallouts() < (calloutLimitOverride ?? Limits.getLimitCallouts());
     }
 }
