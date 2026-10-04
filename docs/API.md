@@ -202,6 +202,8 @@ Known platform constraints:
 
 ## Decision log
 
+Summary. Context, alternatives and consequences of each decision: [design.md](design.md).
+
 | Decision                                     | Why                                                                                  |
 | -------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Named Credentials only                       | Keeps secrets and endpoints out of code and makes Remote Site Settings unnecessary.  |
