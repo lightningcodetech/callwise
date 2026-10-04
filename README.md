@@ -6,8 +6,8 @@
 Every org ends up hand-rolling the same wrapper around `Http.send()`: retries that duplicate POSTs, loops that
 burn the 100-callout limit, `HttpCalloutMock` classes copied from test to test. Callwise is that wrapper, done once.
 
-> **Status: v0.1 in progress.** The public API is in place; `send()` retries within the limits budget and goes through
-> a circuit breaker per Named Credential. `sendAsync()` is being implemented. See [docs/API.md](docs/API.md).
+> **Status: v0.1 in progress.** The library is feature-complete for v0.1; packaging and the first release are next.
+> See [docs/API.md](docs/API.md).
 
 ## Install
 
@@ -57,6 +57,26 @@ CallwiseResponse res = Callwise.to('Stripe_API')
 Customer created = res.isSuccess() ? (Customer) res.deserialize(Customer.class) : null;
 ```
 
+### Send after DML, with real backoff
+
+```apex
+insert order;
+Callwise.to('ERP')
+    .post('/orders')
+    .idempotent()
+    .jsonBody(new OrderRequest(order))
+    .sendAsync(OrderSyncCallback.class); // Queueable; waits 1, 2, 4… minutes between attempts
+
+public class OrderSyncCallback implements Callwise.Callback {
+    public void onResponse(CallwiseRequest request, CallwiseResponse response) {
+        /* final response, any status; DML allowed here */
+    }
+    public void onFailure(CallwiseRequest request, CallwiseException failure) {
+        /* no answer after every attempt */
+    }
+}
+```
+
 ### Handle errors
 
 4xx and 5xx responses are returned, not thrown. Exceptions are reserved for "no answer": transport failures,
@@ -102,6 +122,7 @@ with `thenThrow('Read timed out')`. Full reference, retry semantics and decision
 - Synchronous retries are immediate (Apex cannot sleep). Real backoff only in `sendAsync()`, capped at 10 minutes.
 - Callouts after uncommitted DML fail with `UNCOMMITTED_WORK`; use `sendAsync()`.
 - The circuit breaker uses Platform Cache and is best effort (not atomic across concurrent transactions).
+- Developer Edition and trial orgs allow at most 5 chained Queueables, so at most 5 async attempts there.
 - `jsonBody()` omits null fields of Apex objects, but keeps null values inside a `Map`.
 - No SOQL, no DML, negligible CPU.
 
