@@ -43,16 +43,16 @@ rules (`scripts/verify-commit-message.js`).
 1. **Dev Hub**: enable _Dev Hub_ and _Unlocked Packages and Second-Generation Managed Packages_ in Setup.
 2. **Create the package** (once; it writes `package`, `versionNumber` and `packageAliases` into
    `sfdx-project.json`, commit that):
-   ```bash
-   sf package create --name "Callwise" --package-type Unlocked --path force-app --no-namespace --target-dev-hub devhub
-   ```
+    ```bash
+    sf package create --name "Callwise" --package-type Unlocked --path force-app --no-namespace --target-dev-hub devhub
+    ```
 3. **CI secret**: add `DEVHUB_SFDX_AUTH_URL` in _Settings → Secrets and variables → Actions_. CI uses it to
    validate every change in the Dev Hub org (check-only deploy plus this project's Apex tests), so no scratch
    orgs are created. Recent CLI versions hide secrets in `org display`, hence the variable:
-   ```bash
-   SF_TEMP_SHOW_SECRETS=true sf org display --target-org devhub --verbose --json \
-     | jq -r '.result.sfdxAuthUrl' | gh secret set DEVHUB_SFDX_AUTH_URL
-   ```
+    ```bash
+    SF_TEMP_SHOW_SECRETS=true sf org display --target-org devhub --verbose --json \
+      | jq -r '.result.sfdxAuthUrl' | gh secret set DEVHUB_SFDX_AUTH_URL
+    ```
 
 ### Release
 
