@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an improvement or a new capability.
+labels: ["enhancement"]
+body:
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem
+          description: What you are trying to do and why Callwise does not cover it today.
+      validations:
+          required: true
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposal
+          description: How you would like it to work. An example of the API you would write helps.
+          render: apex
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives considered
+          description: Workarounds you use today or other approaches you thought about.
+    - type: textarea
+      id: limits
+      attributes:
+          label: Governor limits
+          description: Callouts, CPU, async jobs, Platform Cache or SOQL/DML the change would add, if you know.
