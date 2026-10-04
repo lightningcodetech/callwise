@@ -9,6 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 - `Retry-After` in HTTP-date form (IMF-fixdate, e.g. `Wed, 21 Oct 2026 07:28:00 GMT`): `getRetryAfterSeconds()`
   returns the seconds until the date (0 when it has passed), so async backoff and the sync retry rule honour it.
+- Circuit breaker settings per Named Credential: a `Callwise_Breaker__mdt` record named after the Named Credential
+  sets `Failure_Threshold__c` (1–100, default 5) and `Open_Seconds__c` (1–3600, default 60).
 
 ## [0.1.0] - 2026-10-04
 

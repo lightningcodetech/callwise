@@ -2,8 +2,11 @@
  * Internal: circuit breaker per Named Credential. Not part of the public API; the engine uses it for every request
  * unless the request calls withoutCircuitBreaker().
  *
- * CLOSED → OPEN after FAILURE_THRESHOLD consecutive failures. OPEN rejects requests for OPEN_DURATION_MS, then
- * HALF_OPEN lets one trial request through: success closes the circuit, failure opens it again.
+ * CLOSED → OPEN after a number of consecutive failures. OPEN rejects requests for a while, then HALF_OPEN lets one
+ * trial request through: success closes the circuit, failure opens it again.
+ *
+ * Both values come from the Callwise_Breaker__mdt record named after the Named Credential. Without a record, or for a
+ * blank or out-of-range field, the defaults apply: FAILURE_THRESHOLD failures and OPEN_DURATION_MS.
  *
  * State lives in the org Platform Cache partition returned by Callwise.getCachePartition(). When the partition is
  * missing or unusable, state falls back to a store that only lives for the current transaction, and a warning is
@@ -12,10 +15,14 @@
  * Best effort: Platform Cache has no atomic compare-and-set, so concurrent transactions can race on the counter.
  */
 public inherited sharing class CallwiseCircuitBreaker {
-    /** Consecutive failures that open the circuit. */
+    /** Default consecutive failures that open the circuit. */
     public static final Integer FAILURE_THRESHOLD = 5;
-    /** Time the circuit stays open before a trial request is allowed, in milliseconds. */
+    /** Default time the circuit stays open before a trial request is allowed, in milliseconds. */
     public static final Integer OPEN_DURATION_MS = 60000;
+    /** Largest Failure_Threshold__c accepted. */
+    public static final Integer MAX_FAILURE_THRESHOLD = 100;
+    /** Largest Open_Seconds__c accepted; well below the cache TTL, so open state never expires early. */
+    public static final Integer MAX_OPEN_SECONDS = 3600;
 
     /** Cache entries outlive any open period; expiry only resets an idle breaker to CLOSED. */
     private static final Integer CACHE_TTL_SECONDS = 86400;
@@ -29,6 +36,10 @@ public inherited sharing class CallwiseCircuitBreaker {
     @TestVisible
     private static Store storeOverride;
 
+    /** Replaces Callwise_Breaker__mdt records in tests, keyed by Named Credential. */
+    @TestVisible
+    private static Map<String, Callwise_Breaker__mdt> settingsOverride;
+
     /** Lets tests exercise the Platform Cache path; by default tests use the transaction store for isolation. */
     @TestVisible
     private static Boolean usePlatformCacheInTests = false;
@@ -41,6 +52,8 @@ public inherited sharing class CallwiseCircuitBreaker {
 
     private final String namedCredential;
     private final String key;
+    private final Integer failureThreshold;
+    private final Long openDurationMs;
 
     /**
      * Breaker state values.
@@ -85,6 +98,24 @@ public inherited sharing class CallwiseCircuitBreaker {
         this.namedCredential = namedCredential;
         // Cache keys must be alphanumeric; Named Credential names may contain underscores.
         this.key = KEY_PREFIX + EncodingUtil.convertToHex(Crypto.generateDigest('MD5', Blob.valueOf(namedCredential)));
+        Callwise_Breaker__mdt settings = settingsFor(namedCredential);
+        this.failureThreshold = inRange(settings?.Failure_Threshold__c, MAX_FAILURE_THRESHOLD) ?? FAILURE_THRESHOLD;
+        Integer openSeconds = inRange(settings?.Open_Seconds__c, MAX_OPEN_SECONDS);
+        this.openDurationMs = openSeconds == null ? OPEN_DURATION_MS : openSeconds * 1000L;
+    }
+
+    /**
+     * @return Consecutive failures that open this circuit
+     */
+    public Integer getFailureThreshold() {
+        return failureThreshold;
+    }
+
+    /**
+     * @return Time this circuit stays open before a trial request, in milliseconds
+     */
+    public Long getOpenDurationMs() {
+        return openDurationMs;
     }
 
     /**
@@ -98,11 +129,11 @@ public inherited sharing class CallwiseCircuitBreaker {
         if (state.status == CircuitStatus.CLOSED) {
             return true;
         }
-        if (state.status == CircuitStatus.OPEN && now - state.openedAt < OPEN_DURATION_MS) {
+        if (state.status == CircuitStatus.OPEN && now - state.openedAt < openDurationMs) {
             return false;
         }
         // A trial that never reported back (its transaction failed) is replaced after the same wait.
-        if (state.status == CircuitStatus.HALF_OPEN && now - state.trialStartedAt < OPEN_DURATION_MS) {
+        if (state.status == CircuitStatus.HALF_OPEN && now - state.trialStartedAt < openDurationMs) {
             return false;
         }
         state.status = CircuitStatus.HALF_OPEN;
@@ -155,7 +186,7 @@ public inherited sharing class CallwiseCircuitBreaker {
         if (state.status != CircuitStatus.OPEN) {
             return 0;
         }
-        Long remainingMs = Math.max(0, OPEN_DURATION_MS - (now() - state.openedAt));
+        Long remainingMs = Math.max(0, openDurationMs - (now() - state.openedAt));
         return (remainingMs + 999) / 1000;
     }
 
@@ -184,7 +215,7 @@ public inherited sharing class CallwiseCircuitBreaker {
     private void recordFailure() {
         State state = load();
         state.consecutiveFailures++;
-        if (state.status == CircuitStatus.HALF_OPEN || state.consecutiveFailures >= FAILURE_THRESHOLD) {
+        if (state.status == CircuitStatus.HALF_OPEN || state.consecutiveFailures >= failureThreshold) {
             state.status = CircuitStatus.OPEN;
             state.openedAt = now();
             state.trialStartedAt = null;
@@ -198,6 +229,23 @@ public inherited sharing class CallwiseCircuitBreaker {
 
     private void save(State state) {
         store().put(key, state);
+    }
+
+    private static Callwise_Breaker__mdt settingsFor(String namedCredential) {
+        if (settingsOverride != null) {
+            return settingsOverride.get(namedCredential);
+        }
+        return Callwise_Breaker__mdt.getInstance(namedCredential);
+    }
+
+    /**
+     * @return The value as an Integer when it is a whole number between 1 and max, otherwise null
+     */
+    private static Integer inRange(Decimal value, Integer max) {
+        if (value == null || value < 1 || value > max || value.scale() > 0 && value != value.round()) {
+            return null;
+        }
+        return value.intValue();
     }
 
     private static Long now() {
