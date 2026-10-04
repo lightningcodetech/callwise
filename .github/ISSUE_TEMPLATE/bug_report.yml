@@ -1,0 +1,43 @@
+name: Bug report
+description: Callwise does something it should not, or fails to do what the docs say.
+labels: ["bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for reporting. Security problems must not be reported here: use
+              [private vulnerability reporting](https://github.com/lightningcodetech/callwise/security/advisories/new).
+              Remove secrets, tokens and personal data from code and logs before posting.
+    - type: textarea
+      id: what-happened
+      attributes:
+          label: What happened
+          description: What you did, what you expected and what happened instead.
+      validations:
+          required: true
+    - type: textarea
+      id: reproduction
+      attributes:
+          label: Code to reproduce
+          description: The smallest Apex snippet or test that shows the problem. A `CallwiseMock` test is ideal.
+          render: apex
+      validations:
+          required: true
+    - type: textarea
+      id: output
+      attributes:
+          label: Exception or debug log
+          description: The `CallwiseException` reason and message, or the relevant `[Callwise]` debug lines.
+          render: text
+    - type: input
+      id: version
+      attributes:
+          label: Callwise version
+          description: Package version (for example 0.1.0) or the commit you deployed from.
+      validations:
+          required: true
+    - type: input
+      id: context
+      attributes:
+          label: Execution context
+          description: Synchronous, Queueable, Batch, trigger, Flow, test… and the org edition.
