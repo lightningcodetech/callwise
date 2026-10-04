@@ -46,9 +46,12 @@ rules (`scripts/verify-commit-message.js`).
    ```bash
    sf package create --name "Callwise" --package-type Unlocked --path force-app --no-namespace --target-dev-hub devhub
    ```
-3. **CI secret**: add `DEVHUB_SFDX_AUTH_URL` in _Settings → Secrets and variables → Actions_:
+3. **CI secret**: add `DEVHUB_SFDX_AUTH_URL` in _Settings → Secrets and variables → Actions_. CI uses it to
+   validate every change in the Dev Hub org (check-only deploy plus this project's Apex tests), so no scratch
+   orgs are created. Recent CLI versions hide secrets in `org display`, hence the variable:
    ```bash
-   sf org display --target-org devhub --verbose --json | jq -r '.result.sfdxAuthUrl'
+   SF_TEMP_SHOW_SECRETS=true sf org display --target-org devhub --verbose --json \
+     | jq -r '.result.sfdxAuthUrl' | gh secret set DEVHUB_SFDX_AUTH_URL
    ```
 
 ### Release
