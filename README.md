@@ -46,8 +46,8 @@ CallwiseResponse res = Callwise.to('Stripe_API')
     .send();
 ```
 
-> **Status: v0.1 in progress.** The library is feature-complete for v0.1; packaging and the first release are next.
-> See [docs/API.md](docs/API.md).
+> **Version 0.1.** While Callwise is in `0.x`, minor versions may change the API; every change is listed in the
+> [CHANGELOG](CHANGELOG.md). Full reference: [docs/API.md](docs/API.md).
 
 ## Install
 

@@ -1,7 +1,7 @@
 # Callwise API
 
-> Status: **v0.1 in progress.** The public surface below is stable and fully implemented: sync retries within the
-> limits budget, async backoff, the circuit breaker and idempotency keys. Packaging and the first release are next.
+> Applies to **v0.1.0**. While Callwise is in `0.x`, minor versions may change the API; see the
+> [CHANGELOG](../CHANGELOG.md).
 
 ## Goals
 
