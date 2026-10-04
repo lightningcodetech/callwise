@@ -10,6 +10,29 @@
  * }
  */
 public inherited sharing class CallwiseResponse {
+    /** IMF-fixdate, the HTTP-date form senders must use (RFC 9110, section 5.6.7). */
+    private static final Pattern IMF_FIXDATE = Pattern.compile(
+        '^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2}) GMT$'
+    );
+    private static final List<String> MONTHS = new List<String>{
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+    };
+
+    /** Replaces the clock in tests. */
+    @TestVisible
+    private static Long nowOverride;
+
     private final Integer statusCode;
     private final String status;
     private final String body;
@@ -96,17 +119,48 @@ public inherited sharing class CallwiseResponse {
     }
 
     /**
-     * Parses the Retry-After header. Only the delay-seconds form is supported; HTTP dates return null.
+     * Parses the Retry-After header, in either form allowed by RFC 9110: delay-seconds (Retry-After: 120) or an
+     * HTTP date in IMF-fixdate format (Retry-After: Wed, 21 Oct 2026 07:28:00 GMT).
      *
-     * @return Seconds to wait, or null when the header is absent or not a non-negative integer
+     * @return Seconds to wait (0 for a date in the past), or null when the header is absent or cannot be parsed
      */
     public Long getRetryAfterSeconds() {
         String value = getHeader('Retry-After')?.trim();
-        // 18 digits always fits in a Long.
-        if (String.isBlank(value) || !value.isNumeric() || value.length() > 18) {
+        if (String.isBlank(value)) {
             return null;
         }
-        return Long.valueOf(value);
+        if (value.isNumeric()) {
+            // 18 digits always fits in a Long.
+            return value.length() > 18 ? null : Long.valueOf(value);
+        }
+        return secondsUntil(value);
+    }
+
+    private static Long secondsUntil(String httpDate) {
+        Matcher parts = IMF_FIXDATE.matcher(httpDate);
+        if (!parts.matches()) {
+            return null;
+        }
+        Integer day = Integer.valueOf(parts.group(1));
+        Integer month = MONTHS.indexOf(parts.group(2)) + 1;
+        Integer year = Integer.valueOf(parts.group(3));
+        Integer hour = Integer.valueOf(parts.group(4));
+        Integer minute = Integer.valueOf(parts.group(5));
+        Integer second = Integer.valueOf(parts.group(6));
+        // Datetime rolls invalid values over (31 Feb → 3 Mar): reject anything that does not round-trip.
+        Datetime instant = Datetime.newInstanceGmt(year, month, day, hour, minute, second);
+        if (
+            instant.dayGmt() != day ||
+            instant.monthGmt() != month ||
+            instant.yearGmt() != year ||
+            instant.hourGmt() != hour ||
+            instant.minuteGmt() != minute ||
+            instant.secondGmt() != second
+        ) {
+            return null;
+        }
+        Long remainingMs = instant.getTime() - (nowOverride ?? System.currentTimeMillis());
+        return remainingMs <= 0 ? 0 : (remainingMs + 999) / 1000;
     }
 
     /**

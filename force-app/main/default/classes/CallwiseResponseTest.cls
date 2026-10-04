@@ -65,12 +65,57 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldIgnoreRetryAfter_WhenHttpDate() {
+    static void shouldParseRetryAfter_WhenHttpDate() {
+        CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 26, 0).getTime();
+
+        Assert.areEqual(120L, retryAfter('Wed, 21 Oct 2026 07:28:00 GMT'), 'Seconds from now until the date');
+    }
+
+    @IsTest
+    static void shouldRoundHttpDateUp_ToWholeSeconds() {
+        CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 27, 59).getTime() + 500;
+
+        Assert.areEqual(1L, retryAfter('Wed, 21 Oct 2026 07:28:00 GMT'), 'Half a second left waits 1 second');
+    }
+
+    @IsTest
+    static void shouldReturnZero_WhenHttpDateIsInThePast() {
+        CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 8, 0, 0).getTime();
+
+        Assert.areEqual(0L, retryAfter('Wed, 21 Oct 2026 07:28:00 GMT'), 'A past date means no wait');
+    }
+
+    @IsTest
+    static void shouldIgnoreRetryAfter_WhenDateIsInvalid() {
+        CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 0, 0).getTime();
+        List<String> invalid = new List<String>{
+            'Wed, 31 Feb 2026 07:28:00 GMT', // no 31 February
+            'Wed, 21 Oct 2026 24:00:00 GMT', // no hour 24
+            'Wed, 21 Oct 2026 07:28:00 UTC', // must be GMT
+            'Wednesday, 21-Oct-26 07:28:00 GMT', // obsolete RFC 850 form
+            'Wed Oct 21 07:28:00 2026', // obsolete asctime form
+            'Wed, 21 oct 2026 07:28:00 GMT', // month is case-sensitive
+            'tomorrow',
+            '-5'
+        };
+
+        for (String value : invalid) {
+            Assert.isNull(retryAfter(value), 'Should not parse "' + value + '"');
+        }
+    }
+
+    @IsTest
+    static void shouldUseHttpDate_ForAsyncBackoff() {
+        CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 25, 30).getTime();
         CallwiseResponse response = withHeaders(
             new Map<String, String>{ 'Retry-After' => 'Wed, 21 Oct 2026 07:28:00 GMT' }
         );
 
-        Assert.isNull(response.getRetryAfterSeconds(), 'HTTP-date form is not supported');
+        Assert.areEqual(
+            3,
+            CallwiseRetryPolicy.transientErrors().asyncDelayMinutes(1, response),
+            '150 s until the date is rounded up to 3 minutes'
+        );
     }
 
     @IsTest
@@ -155,6 +200,10 @@ private class CallwiseResponseTest {
 
     private static CallwiseResponse withHeaders(Map<String, String> headers) {
         return new CallwiseResponse(raw(200, 'OK', '', headers), 1, 0L);
+    }
+
+    private static Long retryAfter(String value) {
+        return withHeaders(new Map<String, String>{ 'Retry-After' => value }).getRetryAfterSeconds();
     }
 
     private static HttpResponse raw(Integer statusCode, String status, String body, Map<String, String> headers) {

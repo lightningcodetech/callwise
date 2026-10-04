@@ -74,14 +74,14 @@ Bodies are never logged unless you ask for it: they routinely carry PII.
 
 Serializable copy of `HttpResponse` (which is not serializable), so async jobs can carry it.
 
-| Member                                              | Description                                                |
-| --------------------------------------------------- | ---------------------------------------------------------- |
-| `getStatusCode()`, `getStatus()`, `getBody()`       | As received.                                               |
-| `getHeader(name)`, `getHeaders()`                   | Case-insensitive; names stored in lower case.              |
-| `getAttempts()`, `getElapsedMs()`                   | Attempts made and total wall-clock time.                   |
-| `getRetryAfterSeconds()`                            | Numeric `Retry-After` only; HTTP-date form returns `null`. |
-| `isSuccess()`, `isClientError()`, `isServerError()` | 2xx, 4xx, 5xx.                                             |
-| `deserialize(Type)`, `deserializeUntyped()`         | `null` for a blank body; `JSONException` for invalid JSON. |
+| Member                                              | Description                                                                                                                                                                       |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getStatusCode()`, `getStatus()`, `getBody()`       | As received.                                                                                                                                                                      |
+| `getHeader(name)`, `getHeaders()`                   | Case-insensitive; names stored in lower case.                                                                                                                                     |
+| `getAttempts()`, `getElapsedMs()`                   | Attempts made and total wall-clock time.                                                                                                                                          |
+| `getRetryAfterSeconds()`                            | Seconds (`Retry-After: 120`) or the time until an HTTP date in IMF-fixdate form (`Wed, 21 Oct 2026 07:28:00 GMT`), 0 when the date has passed; `null` when absent or unparseable. |
+| `isSuccess()`, `isClientError()`, `isServerError()` | 2xx, 4xx, 5xx.                                                                                                                                                                    |
+| `deserialize(Type)`, `deserializeUntyped()`         | `null` for a blank body; `JSONException` for invalid JSON.                                                                                                                        |
 
 ### `CallwiseRetryPolicy`
 
@@ -137,7 +137,7 @@ greater than 0 disables the sync retry: hammering a server that asked you to wai
 attempt has fresh limits and DML earlier in the caller's transaction does not matter. On a retryable outcome the job
 enqueues the next attempt with `System.enqueueJob(job, delayMinutes)`:
 
-- `Retry-After: n` (seconds) → `ceil(n / 60)` minutes, max 10.
+- `Retry-After: n` (seconds) or `Retry-After: <HTTP date>` → seconds to wait rounded up to minutes, max 10.
 - Otherwise `base * 2^(attempt - 1)` minutes, max 10. With the default base of 1: 1, 2, 4, 8, 10, 10…
 
 The same idempotency rules apply, and the request travels in the job state, so every attempt sends the same
@@ -228,7 +228,8 @@ Known platform constraints:
 - Developer Edition and trial orgs allow a chain of at most 5 Queueable jobs, so `sendAsync()` can make at most
   5 attempts there.
 - `jsonBody()` omits null fields of Apex objects but keeps null values inside a `Map`.
-- `Retry-After` in HTTP-date form is ignored.
+- `Retry-After` dates are only parsed in IMF-fixdate form, the one RFC 9110 requires senders to use; the obsolete
+  RFC 850 and asctime forms return `null`.
 
 ## Decision log
 

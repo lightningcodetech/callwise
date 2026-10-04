@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- `Retry-After` in HTTP-date form (IMF-fixdate, e.g. `Wed, 21 Oct 2026 07:28:00 GMT`): `getRetryAfterSeconds()`
+  returns the seconds until the date (0 when it has passed), so async backoff and the sync retry rule honour it.
+
 ## [0.1.0] - 2026-10-04
 
 First release.

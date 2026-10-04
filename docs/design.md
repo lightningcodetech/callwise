@@ -102,7 +102,7 @@ answer later (`sendAsync()`).
 minutes.
 
 **Decision.** `sendAsync()` runs each attempt in its own Queueable with `Database.AllowsCallouts`. On a retryable
-outcome the job enqueues the next attempt: `Retry-After` in seconds is rounded up to minutes; otherwise
+outcome the job enqueues the next attempt: `Retry-After` (seconds or an HTTP date) is rounded up to minutes; otherwise
 `base * 2^(attempt - 1)` minutes, capped at 10. When the circuit is open, no callout is made and the attempt is
 retried no earlier than the breaker's next trial; since nothing was sent, this is safe for any HTTP method.
 
