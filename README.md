@@ -49,7 +49,7 @@ if (res.isSuccess()) {
 ```apex
 CallwiseResponse res = Callwise.to('Stripe_API')
     .post('/v1/customers')
-    .header('Idempotency-Key', order.Id) // without it, POST is never retried
+    .header('Idempotency-Key', order.Id) // or .idempotent(); without a key, POST is never retried
     .jsonBody(new CustomerRequest(order))
     .retry(CallwiseRetryPolicy.transientErrors().maxAttempts(3))
     .send();

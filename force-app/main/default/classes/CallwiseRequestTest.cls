@@ -261,6 +261,61 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
+    static void shouldGenerateIdempotencyKey_WhenIdempotentIsCalled() {
+        CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent();
+
+        String key = request.getIdempotencyKey();
+        Assert.isTrue(
+            Pattern.matches('[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', key),
+            'Key should be a UUID v4, got ' + key
+        );
+        Assert.isTrue(request.isIdempotent(), 'POST with a generated key is idempotent');
+        Assert.areEqual(key, request.toHttpRequest().getHeader('Idempotency-Key'), 'Key should be sent');
+    }
+
+    @IsTest
+    static void shouldKeepGeneratedKey_WhenIdempotentIsCalledTwice() {
+        CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent();
+        String firstKey = request.getIdempotencyKey();
+
+        request.idempotent();
+
+        Assert.areEqual(firstKey, request.getIdempotencyKey(), 'Key is generated once');
+    }
+
+    @IsTest
+    static void shouldGenerateDifferentKeys_ForDifferentRequests() {
+        String first = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent().getIdempotencyKey();
+        String second = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent().getIdempotencyKey();
+
+        Assert.areNotEqual(first, second, 'Each request gets its own key');
+    }
+
+    @IsTest
+    static void shouldKeepCallerKey_WhenIdempotentIsCalled() {
+        CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
+            .post('/a')
+            .header('idempotency-key', 'order-42')
+            .idempotent();
+
+        Assert.areEqual('order-42', request.getIdempotencyKey(), 'Caller key takes precedence');
+        Assert.areEqual(1, request.getHeaders().size(), 'No duplicate header');
+    }
+
+    @IsTest
+    static void shouldReplaceBlankCallerKey_WhenIdempotentIsCalled() {
+        CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').header('Idempotency-Key', ' ').idempotent();
+
+        Assert.isNotNull(request.getIdempotencyKey(), 'Blank key is replaced by a generated one');
+        Assert.areEqual(1, request.getHeaders().size(), 'No duplicate header');
+    }
+
+    @IsTest
+    static void shouldReturnNullIdempotencyKey_WhenAbsent() {
+        Assert.isNull(Callwise.to(NAMED_CREDENTIAL).post('/a').getIdempotencyKey(), 'No key by default');
+    }
+
+    @IsTest
     static void shouldBuildHttpRequest() {
         HttpRequest built = Callwise.to(NAMED_CREDENTIAL)
             .put('/items/1')

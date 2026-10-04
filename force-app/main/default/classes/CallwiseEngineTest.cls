@@ -222,6 +222,32 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
+    static void shouldSendSameGeneratedKey_OnEveryAttempt() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('POST', '/a')
+            .thenRespond(503, '')
+            .thenThrow('Read timed out')
+            .thenRespond(201, '')
+            .install();
+        CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent();
+
+        Test.startTest();
+        CallwiseResponse response = request.send();
+        Test.stopTest();
+
+        Assert.areEqual(201, response.getStatusCode(), 'Third attempt should succeed');
+        List<HttpRequest> sent = mock.getRequests();
+        Assert.areEqual(3, sent.size(), 'POST with a generated key is retried');
+        for (HttpRequest attempt : sent) {
+            Assert.areEqual(
+                request.getIdempotencyKey(),
+                attempt.getHeader('Idempotency-Key'),
+                'Every attempt carries the same key'
+            );
+        }
+    }
+
+    @IsTest
     static void shouldNotRetry_WhenServerAsksToWait() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')

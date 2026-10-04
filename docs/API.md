@@ -55,20 +55,21 @@ Bodies are never logged unless you ask for it: they routinely carry PII.
 
 ### `CallwiseRequest`
 
-| Member                                     | Description                                                                                                                                                                                          |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get/head/post/put/patch/del(path)`        | Sets method and path. `del` because `delete` is reserved. A missing leading `/` is added; absolute URLs are rejected.                                                                                |
-| `header(name, value)`                      | Replaces any header with the same name (case-insensitive). `null` value → `''`.                                                                                                                      |
-| `param(name, value)`                       | Appends a URL-encoded query parameter. Order and repeats are preserved. `null` value → `''`.                                                                                                         |
-| `body(String)`                             | Raw body. Set `Content-Type` yourself.                                                                                                                                                               |
-| `jsonBody(Object)`                         | `JSON.serialize(value, true)` and `Content-Type: application/json` unless already set.                                                                                                               |
-| `timeout(ms)`                              | Per-attempt timeout, 1–120000. Default 10000.                                                                                                                                                        |
-| `retry(policy)`                            | Default `CallwiseRetryPolicy.transientErrors()`. Use `none()` to disable.                                                                                                                            |
-| `withoutCircuitBreaker()`                  | Ignore and do not update the breaker for this request.                                                                                                                                               |
-| `throwOnError()`                           | Throw `HTTP_ERROR` when the final status is not 2xx.                                                                                                                                                 |
-| `send()`                                   | Synchronous. Returns `CallwiseResponse`.                                                                                                                                                             |
-| `sendAsync()` / `sendAsync(Type callback)` | Queueable delivery; returns the job Id. The callback type is validated up front. _(next iteration)_                                                                                                  |
-| Getters                                    | `getNamedCredential`, `getMethod`, `getPath`, `getEndpoint`, `getHeaders`, `getBody`, `getTimeoutMs`, `getRetryPolicy`, `isCircuitBreakerEnabled`, `isThrowOnError`, `isIdempotent`, `toHttpRequest` |
+| Member                                     | Description                                                                                                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get/head/post/put/patch/del(path)`        | Sets method and path. `del` because `delete` is reserved. A missing leading `/` is added; absolute URLs are rejected.                                                                                                     |
+| `header(name, value)`                      | Replaces any header with the same name (case-insensitive). `null` value → `''`.                                                                                                                                           |
+| `idempotent()`                             | Sends an `Idempotency-Key` generated once (UUID v4) and reused on every attempt, so POST/PATCH can be retried. A caller-provided key is kept.                                                                             |
+| `param(name, value)`                       | Appends a URL-encoded query parameter. Order and repeats are preserved. `null` value → `''`.                                                                                                                              |
+| `body(String)`                             | Raw body. Set `Content-Type` yourself.                                                                                                                                                                                    |
+| `jsonBody(Object)`                         | `JSON.serialize(value, true)` and `Content-Type: application/json` unless already set.                                                                                                                                    |
+| `timeout(ms)`                              | Per-attempt timeout, 1–120000. Default 10000.                                                                                                                                                                             |
+| `retry(policy)`                            | Default `CallwiseRetryPolicy.transientErrors()`. Use `none()` to disable.                                                                                                                                                 |
+| `withoutCircuitBreaker()`                  | Ignore and do not update the breaker for this request.                                                                                                                                                                    |
+| `throwOnError()`                           | Throw `HTTP_ERROR` when the final status is not 2xx.                                                                                                                                                                      |
+| `send()`                                   | Synchronous. Returns `CallwiseResponse`.                                                                                                                                                                                  |
+| `sendAsync()` / `sendAsync(Type callback)` | Queueable delivery; returns the job Id. The callback type is validated up front. _(next iteration)_                                                                                                                       |
+| Getters                                    | `getNamedCredential`, `getMethod`, `getPath`, `getEndpoint`, `getHeaders`, `getBody`, `getTimeoutMs`, `getRetryPolicy`, `isCircuitBreakerEnabled`, `isThrowOnError`, `isIdempotent`, `getIdempotencyKey`, `toHttpRequest` |
 
 ### `CallwiseResponse`
 
@@ -119,7 +120,8 @@ See [Testing](#testing).
 ## Retry semantics
 
 **Idempotency first.** Only GET, HEAD, PUT and DELETE are retried. POST and PATCH are retried only with a
-non-blank `Idempotency-Key` header or `allowNonIdempotent()`: a POST that timed out may already have succeeded.
+non-blank `Idempotency-Key` header (set it yourself or call `idempotent()`) or `allowNonIdempotent()`: a POST that
+timed out may already have succeeded. The same key is sent on every attempt.
 
 **Synchronous.** Apex cannot sleep, and a busy-wait burns CPU time without helping the server.
 Sync retries are therefore immediate and only happen if the next attempt fits in the budget:
