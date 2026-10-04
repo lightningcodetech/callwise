@@ -20,6 +20,7 @@ are implemented.
 | [10](#10-async-callbacks-by-type)                     | Async callbacks by `Type`                        | Implemented |
 | [11](#11-declarative-mock-shipped-with-the-library)   | Declarative mock shipped with the library        | Implemented |
 | [12](#12-public-no-namespace-inherited-sharing)       | `public`, no namespace, `inherited sharing`      | Implemented |
+| [13](#13-breaker-settings-in-custom-metadata)         | Breaker settings in Custom Metadata              | Implemented |
 
 ## 1. Named Credentials only
 
@@ -201,3 +202,25 @@ never be removed, which would freeze the API before it has been used.
 
 **Consequences.** Callwise runs in the caller's sharing context. It does no SOQL or DML, so sharing has no effect
 today. A namespace can be introduced later as a major version.
+
+## 13. Breaker settings in Custom Metadata
+
+**Context.** One threshold and one open period do not fit every API: a payments API may deserve a lower threshold, a
+slow batch API a longer open period.
+
+**Decision.** A `Callwise_Breaker__mdt` record named after the Named Credential sets `Failure_Threshold__c` (1–100)
+and `Open_Seconds__c` (1–3600). Without a record, or for a blank or out-of-range field, the defaults apply: 5
+failures and 60 s.
+
+**Alternatives.**
+
+- Configuration in code, such as `Callwise.configureBreaker(name, threshold, seconds)`. Discarded: it is static
+  state, so it does not reach the Queueables of `sendAsync()`, and changing it needs a deploy.
+- Custom Settings. Discarded: they suit values that vary per user or profile, or change like data; this is
+  application configuration.
+- A setting per request. Discarded: the breaker is shared by every request to the same Named Credential; two
+  thresholds for one breaker would make its state inconsistent.
+
+**Consequences.** Admins tune each API in Setup, per environment, without code. `getInstance()` does not count
+against SOQL limits, so Callwise keeps its "no SOQL, no DML" rule. The package now includes a custom metadata type.
+The open period is capped at one hour, far below the 24 h cache TTL, so an open circuit never expires early.

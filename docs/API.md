@@ -158,6 +158,17 @@ callback fails that job; it is visible in Setup → Apex Jobs.
 One breaker per Named Credential: `CLOSED → OPEN` after 5 consecutive failures, `OPEN` for 60 s, then
 `HALF_OPEN` lets one request through; success closes it, failure reopens it.
 
+**Settings per Named Credential.** Create a `Callwise Breaker` custom metadata record (Setup → Custom Metadata
+Types) whose **name is the Named Credential API name**:
+
+| Field                  | Range  | Default |
+| ---------------------- | ------ | ------- |
+| `Failure_Threshold__c` | 1–100  | 5       |
+| `Open_Seconds__c`      | 1–3600 | 60      |
+
+A blank or out-of-range field uses its default. Records are read with `getInstance()`, which does not count against
+SOQL limits, and apply to `send()` and `sendAsync()` alike.
+
 - **Failures** are transport errors, timeouts and 5xx, 408 and 429 responses. Any other response (including 4xx such
   as 404 or 409) counts as a success: the endpoint answered. `UNCOMMITTED_WORK` and `LIMIT_BUDGET` are not
   recorded.

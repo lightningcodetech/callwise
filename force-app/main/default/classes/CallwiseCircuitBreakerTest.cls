@@ -227,6 +227,119 @@ private class CallwiseCircuitBreakerTest {
         );
     }
 
+    // ---------------------------------------------------------------------------------------------------------
+    // Settings (Callwise_Breaker__mdt)
+    // ---------------------------------------------------------------------------------------------------------
+
+    @IsTest
+    static void shouldUseDefaults_WhenNoSettingsRecordExists() {
+        CallwiseCircuitBreaker breaker = new CallwiseCircuitBreaker('No_Record_For_This_Credential');
+
+        Assert.areEqual(CallwiseCircuitBreaker.FAILURE_THRESHOLD, breaker.getFailureThreshold(), 'Default threshold');
+        Assert.areEqual(
+            (Long) CallwiseCircuitBreaker.OPEN_DURATION_MS,
+            breaker.getOpenDurationMs(),
+            'Default open period'
+        );
+    }
+
+    @IsTest
+    static void shouldOpen_AtConfiguredThreshold() {
+        configure(NAMED_CREDENTIAL, 2, null);
+        CallwiseCircuitBreaker breaker = newBreaker();
+
+        fail(breaker, 1);
+        CallwiseCircuitBreaker.CircuitStatus afterOne = breaker.getStatus();
+        fail(breaker, 1);
+
+        Assert.areEqual(CallwiseCircuitBreaker.CircuitStatus.CLOSED, afterOne, 'One failure is below the threshold');
+        Assert.areEqual(CallwiseCircuitBreaker.CircuitStatus.OPEN, breaker.getStatus(), 'Two failures open it');
+        Assert.areEqual(60, breaker.secondsUntilTrial(), 'Open period keeps its default');
+    }
+
+    @IsTest
+    static void shouldStayOpen_ForConfiguredSeconds() {
+        configure(NAMED_CREDENTIAL, null, 120);
+        CallwiseCircuitBreaker breaker = openBreaker();
+
+        CallwiseCircuitBreaker.nowOverride = T0 + 119000;
+        Boolean allowedBefore = breaker.allowRequest();
+        CallwiseCircuitBreaker.nowOverride = T0 + 120000;
+
+        Assert.isFalse(allowedBefore, 'Still open at 119 s');
+        Assert.isTrue(breaker.allowRequest(), 'Trial allowed at 120 s');
+        Assert.areEqual(
+            CallwiseCircuitBreaker.FAILURE_THRESHOLD,
+            breaker.getFailureThreshold(),
+            'Threshold keeps its default'
+        );
+    }
+
+    @IsTest
+    static void shouldIgnoreOutOfRangeSettings() {
+        Map<Decimal, Decimal> thresholdAndSeconds = new Map<Decimal, Decimal>{
+            0 => 0,
+            -1 => -60,
+            101 => 3601,
+            2.5 => 90.5
+        };
+
+        for (Decimal threshold : thresholdAndSeconds.keySet()) {
+            configure(NAMED_CREDENTIAL, threshold, thresholdAndSeconds.get(threshold));
+            CallwiseCircuitBreaker breaker = newBreaker();
+
+            Assert.areEqual(
+                CallwiseCircuitBreaker.FAILURE_THRESHOLD,
+                breaker.getFailureThreshold(),
+                'Threshold ' + threshold + ' falls back to the default'
+            );
+            Assert.areEqual(
+                (Long) CallwiseCircuitBreaker.OPEN_DURATION_MS,
+                breaker.getOpenDurationMs(),
+                'Open seconds ' + thresholdAndSeconds.get(threshold) + ' fall back to the default'
+            );
+        }
+    }
+
+    @IsTest
+    static void shouldAcceptLimitValues() {
+        configure(
+            NAMED_CREDENTIAL,
+            CallwiseCircuitBreaker.MAX_FAILURE_THRESHOLD,
+            CallwiseCircuitBreaker.MAX_OPEN_SECONDS
+        );
+        CallwiseCircuitBreaker breaker = newBreaker();
+
+        Assert.areEqual(100, breaker.getFailureThreshold(), 'Largest threshold accepted');
+        Assert.areEqual(3600000L, breaker.getOpenDurationMs(), 'Largest open period accepted');
+    }
+
+    @IsTest
+    static void shouldApplySettings_OnlyToTheirNamedCredential() {
+        configure('Payments_API', 1, 300);
+
+        Assert.areEqual(1, new CallwiseCircuitBreaker('Payments_API').getFailureThreshold(), 'Configured credential');
+        Assert.areEqual(
+            CallwiseCircuitBreaker.FAILURE_THRESHOLD,
+            newBreaker().getFailureThreshold(),
+            'Other credentials keep the defaults'
+        );
+    }
+
+    private static void configure(String namedCredential, Decimal threshold, Decimal openSeconds) {
+        Map<String, Object> fields = new Map<String, Object>{
+            'DeveloperName' => namedCredential,
+            'Failure_Threshold__c' => threshold,
+            'Open_Seconds__c' => openSeconds
+        };
+        CallwiseCircuitBreaker.settingsOverride = new Map<String, Callwise_Breaker__mdt>{
+            namedCredential => (Callwise_Breaker__mdt) JSON.deserialize(
+                JSON.serialize(fields),
+                Callwise_Breaker__mdt.class
+            )
+        };
+    }
+
     private static CallwiseCircuitBreaker newBreaker() {
         return new CallwiseCircuitBreaker(NAMED_CREDENTIAL);
     }

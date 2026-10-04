@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Failure_Threshold__c</fullName>
+    <description>Consecutive failures that open the circuit, from 1 to 100. Blank or out of range: 5.</description>
+    <externalId>false</externalId>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <inlineHelpText
+    >Consecutive failures (transport errors, timeouts, 5xx, 408, 429) that open the circuit. 1 to 100; blank uses 5.</inlineHelpText>
+    <label>Failure Threshold</label>
+    <precision>3</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
