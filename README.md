@@ -1,10 +1,50 @@
 # Callwise
 
+[![CI](https://github.com/lightningcodetech/callwise/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lightningcodetech/callwise/actions/workflows/ci.yml)
+[![Apex coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/lightningcodetech/e88955814d3eda9b2eedfc08e26c5749/raw/callwise-coverage.json)](https://github.com/lightningcodetech/callwise/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+
 > Resilient REST callouts for Salesforce: idempotency-aware retries, governor-limit budgeting, async backoff,
 > a circuit breaker per Named Credential and declarative test mocks. Zero dependencies.
 
 Every org ends up hand-rolling the same wrapper around `Http.send()`: retries that duplicate POSTs, loops that
 burn the 100-callout limit, `HttpCalloutMock` classes copied from test to test. Callwise is that wrapper, done once.
+
+**Before**: retries written by hand, still unaware of limits, `Retry-After` or a failing endpoint.
+
+```apex
+HttpRequest req = new HttpRequest();
+req.setEndpoint('callout:Stripe_API/v1/customers');
+req.setMethod('POST');
+req.setHeader('Content-Type', 'application/json');
+req.setHeader('Idempotency-Key', order.Id);
+req.setBody(JSON.serialize(new CustomerRequest(order), true));
+req.setTimeout(10000);
+HttpResponse res;
+for (Integer attempt = 1; attempt <= 3; attempt++) {
+    try {
+        res = new Http().send(req);
+        if (res.getStatusCode() < 500 && res.getStatusCode() != 429) {
+            break;
+        }
+    } catch (CalloutException e) {
+        if (attempt == 3) {
+            throw e;
+        }
+    }
+}
+// ...and a hand-written HttpCalloutMock class with state for every test.
+```
+
+**After**: the same call, with retries bounded by the transaction's limits, a circuit breaker and a declarative mock.
+
+```apex
+CallwiseResponse res = Callwise.to('Stripe_API')
+    .post('/v1/customers')
+    .header('Idempotency-Key', order.Id)
+    .jsonBody(new CustomerRequest(order))
+    .send();
+```
 
 > **Status: v0.1 in progress.** The library is feature-complete for v0.1; packaging and the first release are next.
 > See [docs/API.md](docs/API.md).
