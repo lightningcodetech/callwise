@@ -3,8 +3,9 @@
  *
  * Synchronous sends retry immediately (Apex cannot sleep) while the retry policy allows it and the next attempt
  * fits in the transaction's limits: one callout from the 100 available, and the request's timeout within what
- * remains of the 120 s cumulative callout time. Unless the request opts out, every attempt goes through the circuit
- * breaker of its Named Credential. The async Queueable is implemented in the next iteration.
+ * remains of the 120 s cumulative callout time. Asynchronous sends run one attempt per CallwiseAsyncJob and wait
+ * between attempts by re-enqueueing with a delay. Unless the request opts out, every attempt goes through the circuit
+ * breaker of its Named Credential.
  */
 public inherited sharing class CallwiseEngine {
     /** Cumulative callout time the platform allows per transaction, in milliseconds. */
@@ -23,6 +24,18 @@ public inherited sharing class CallwiseEngine {
     /** Replaces Limits.getLimitCallouts() in tests, so the callout budget can be exhausted cheaply. */
     @TestVisible
     private static Integer calloutLimitOverride;
+
+    /** Replaces Limits.getLimitQueueableJobs() in tests. */
+    @TestVisible
+    private static Integer queueableLimitOverride;
+
+    /**
+     * Result of a single attempt: exactly one of response and failure is set.
+     */
+    public class Outcome {
+        public CallwiseResponse response;
+        public CallwiseException failure;
+    }
 
     /**
      * Sends the request synchronously, retrying while the policy and the limits budget allow it.
@@ -54,47 +67,84 @@ public inherited sharing class CallwiseEngine {
         }
         Long startedAt = System.currentTimeMillis();
         Integer attempt = 0;
-        CallwiseResponse response;
-        CallwiseException failure;
+        Outcome outcome;
         do {
             attempt++;
-            response = null;
-            failure = null;
-            Long attemptStartedAt = System.currentTimeMillis();
-            try {
-                HttpResponse rawResponse = new Http().send(request.toHttpRequest());
-                response = new CallwiseResponse(rawResponse, attempt, System.currentTimeMillis() - startedAt);
-            } catch (CalloutException e) {
-                failure = translate(e);
-            } finally {
-                calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
-            }
-            breaker?.record(response, failure);
-            Callwise.getLogger().log(request, response, failure, attempt);
-        } while (shouldRetry(request, response, failure, attempt) && (breaker == null || breaker.allowRequest()));
+            outcome = attempt(request, breaker, attempt, startedAt);
+        } while (
+            shouldRetry(request, outcome.response, outcome.failure, attempt) &&
+            (breaker == null || breaker.allowRequest())
+        );
 
-        if (failure != null) {
-            throw failure;
+        if (outcome.failure != null) {
+            throw outcome.failure;
         }
-        if (request.isThrowOnError() && !response.isSuccess()) {
-            throw CallwiseException.fromResponse(response);
+        if (request.isThrowOnError() && !outcome.response.isSuccess()) {
+            throw CallwiseException.fromResponse(outcome.response);
         }
-        return response;
+        return outcome.response;
     }
 
     /**
-     * Enqueues the request for asynchronous delivery.
+     * Enqueues the request for asynchronous delivery. Each attempt runs in its own CallwiseAsyncJob.
      *
      * @param request Request to send
      * @param callbackClassName Name of a Callwise.Callback implementation, or null for no callback
      * @return Id of the enqueued job
-     * @throws CallwiseException always, until the async engine ships
+     * @throws CallwiseException INVALID_REQUEST when request is null, LIMIT_BUDGET when no Queueable job can be added
+     *         in this transaction
      */
     public Id sendAsync(CallwiseRequest request, String callbackClassName) {
-        throw CallwiseException.create(
-            CallwiseException.FailureReason.INVALID_REQUEST,
-            'sendAsync() is not available in this build yet.'
-        );
+        if (request == null) {
+            throw CallwiseException.create(
+                CallwiseException.FailureReason.INVALID_REQUEST,
+                'Request must not be null.'
+            );
+        }
+        if (!hasQueueableLeft()) {
+            throw CallwiseException.create(
+                CallwiseException.FailureReason.LIMIT_BUDGET,
+                'No Queueable jobs left in this transaction (' + Limits.getQueueableJobs() + ' enqueued).'
+            );
+        }
+        return System.enqueueJob(new CallwiseAsyncJob(request, callbackClassName, 1));
+    }
+
+    /**
+     * Makes one attempt: one callout, recorded in the breaker (when given) and logged.
+     *
+     * @param request Request to send
+     * @param breaker Breaker of the request's Named Credential, or null when it is bypassed
+     * @param attempt Attempt number, starting at 1
+     * @param startedAt When the first attempt of this send started, for CallwiseResponse.getElapsedMs()
+     * @return Response or failure of the attempt
+     */
+    public static Outcome attempt(
+        CallwiseRequest request,
+        CallwiseCircuitBreaker breaker,
+        Integer attempt,
+        Long startedAt
+    ) {
+        Outcome outcome = new Outcome();
+        Long attemptStartedAt = System.currentTimeMillis();
+        try {
+            HttpResponse rawResponse = new Http().send(request.toHttpRequest());
+            outcome.response = new CallwiseResponse(rawResponse, attempt, System.currentTimeMillis() - startedAt);
+        } catch (CalloutException e) {
+            outcome.failure = translate(e);
+        } finally {
+            calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
+        }
+        breaker?.record(outcome.response, outcome.failure);
+        Callwise.getLogger().log(request, outcome.response, outcome.failure, attempt);
+        return outcome;
+    }
+
+    /**
+     * @return True when another Queueable job can be enqueued in this transaction
+     */
+    public static Boolean hasQueueableLeft() {
+        return Limits.getQueueableJobs() < (queueableLimitOverride ?? Limits.getLimitQueueableJobs());
     }
 
     /**

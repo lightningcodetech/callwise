@@ -1,8 +1,7 @@
 # Callwise API
 
-> Status: **v0.1 in progress.** The public surface below is stable. `send()` retries within the limits budget and
-> goes through the circuit breaker; `sendAsync()` lands in the next iteration. Sections describing it are marked
-> _(next iteration)_.
+> Status: **v0.1 in progress.** The public surface below is stable and fully implemented: sync retries within the
+> limits budget, async backoff, the circuit breaker and idempotency keys. Packaging and the first release are next.
 
 ## Goals
 
@@ -68,7 +67,7 @@ Bodies are never logged unless you ask for it: they routinely carry PII.
 | `withoutCircuitBreaker()`                  | Ignore and do not update the breaker for this request.                                                                                                                                                                    |
 | `throwOnError()`                           | Throw `HTTP_ERROR` when the final status is not 2xx.                                                                                                                                                                      |
 | `send()`                                   | Synchronous. Returns `CallwiseResponse`.                                                                                                                                                                                  |
-| `sendAsync()` / `sendAsync(Type callback)` | Queueable delivery; returns the job Id. The callback type is validated up front. _(next iteration)_                                                                                                                       |
+| `sendAsync()` / `sendAsync(Type callback)` | Queueable delivery with real backoff; returns the job Id. The callback type is validated up front. See [Retry semantics](#retry-semantics).                                                                               |
 | Getters                                    | `getNamedCredential`, `getMethod`, `getPath`, `getEndpoint`, `getHeaders`, `getBody`, `getTimeoutMs`, `getRetryPolicy`, `isCircuitBreakerEnabled`, `isThrowOnError`, `isIdempotent`, `getIdempotencyKey`, `toHttpRequest` |
 
 ### `CallwiseResponse`
@@ -134,11 +133,25 @@ first attempt has a callout left, `send()` throws `LIMIT_BUDGET` without calling
 the cumulative callout time, so Callwise counts only the time spent in its own callouts during the transaction. A `Retry-After`
 greater than 0 disables the sync retry: hammering a server that asked you to wait is worse than failing.
 
-**Asynchronous** _(next iteration)_. `sendAsync()` runs the request in a Queueable with `Database.AllowsCallouts`.
-On a retryable failure it re-enqueues itself with `System.enqueueJob(job, delayMinutes)`:
+**Asynchronous.** `sendAsync()` runs each attempt in its own Queueable with `Database.AllowsCallouts`, so every
+attempt has fresh limits and DML earlier in the caller's transaction does not matter. On a retryable outcome the job
+enqueues the next attempt with `System.enqueueJob(job, delayMinutes)`:
 
 - `Retry-After: n` (seconds) → `ceil(n / 60)` minutes, max 10.
 - Otherwise `base * 2^(attempt - 1)` minutes, max 10. With the default base of 1: 1, 2, 4, 8, 10, 10…
+
+The same idempotency rules apply, and the request travels in the job state, so every attempt sends the same
+`Idempotency-Key`. When the circuit is open the attempt makes no callout and is retried, whatever the HTTP method,
+no earlier than the breaker's next trial.
+
+The callback (`sendAsync(Type)`) receives only the final outcome, in the transaction of the last job:
+
+- `onResponse(request, response)` with the final response, whatever its status;
+- `onFailure(request, failure)` when the last attempt failed (`TRANSPORT`, `TIMEOUT`, `CIRCUIT_OPEN`…), or with
+  `HTTP_ERROR` when the request used `throwOnError()` and the final status is not 2xx.
+
+Static settings (`Callwise.setLogger()`, `setCachePartition()`) do not travel to the jobs. An exception thrown by the
+callback fails that job; it is visible in Setup → Apex Jobs.
 
 ## Circuit breaker
 
@@ -195,6 +208,8 @@ static void retriesTransientFailures() {
 - `thenThrow('Read timed out')` makes the callout throw a `CalloutException`.
 - An unmatched request throws `CallwiseMock.MockException` listing the registered routes.
 - `getRequests()` returns every `HttpRequest` received, for asserting headers and bodies.
+- **`sendAsync()` in tests:** the first attempt runs at `Test.stopTest()`. Apex does not allow chaining Queueable
+  jobs in tests, so later attempts are not enqueued; assert on the first attempt or use `send()`.
 
 ## Limits
 
@@ -210,6 +225,8 @@ static void retriesTransientFailures() {
 Known platform constraints:
 
 - Callouts after DML in the same transaction fail (`UNCOMMITTED_WORK`); use `sendAsync()`.
+- Developer Edition and trial orgs allow a chain of at most 5 Queueable jobs, so `sendAsync()` can make at most
+  5 attempts there.
 - `jsonBody()` omits null fields of Apex objects but keeps null values inside a `Map`.
 - `Retry-After` in HTTP-date form is ignored.
 

@@ -13,11 +13,11 @@ are implemented.
 | [3](#3-idempotency-aware-retries)                     | Idempotency-aware retries                        | Implemented |
 | [4](#4-sync-retries-bounded-by-a-limits-budget)       | Sync retries are immediate and bounded by limits | Implemented |
 | [5](#5-no-automatic-fallback-to-async)                | No automatic fallback to async                   | Implemented |
-| [6](#6-real-backoff-only-in-async)                    | Real backoff only in async                       | Planned     |
+| [6](#6-real-backoff-only-in-async)                    | Real backoff only in async                       | Implemented |
 | [7](#7-callwise-generated-idempotency-keys)           | Callwise-generated idempotency keys              | Implemented |
 | [8](#8-circuit-breaker-in-platform-cache-best-effort) | Circuit breaker in Platform Cache, best effort   | Implemented |
 | [9](#9-responses-are-copied-into-callwiseresponse)    | Responses are copied into `CallwiseResponse`     | Implemented |
-| [10](#10-async-callbacks-by-type)                     | Async callbacks by `Type`                        | Planned     |
+| [10](#10-async-callbacks-by-type)                     | Async callbacks by `Type`                        | Implemented |
 | [11](#11-declarative-mock-shipped-with-the-library)   | Declarative mock shipped with the library        | Implemented |
 | [12](#12-public-no-namespace-inherited-sharing)       | `public`, no namespace, `inherited sharing`      | Implemented |
 
@@ -101,15 +101,18 @@ answer later (`sendAsync()`).
 **Context.** The only real wait the platform offers is `System.enqueueJob(job, delayMinutes)`, between 0 and 10
 minutes.
 
-**Decision.** `sendAsync()` runs the request in a Queueable with `Database.AllowsCallouts`. On a retryable failure it
-re-enqueues itself: `Retry-After` in seconds is rounded up to minutes; otherwise `base * 2^(attempt - 1)` minutes,
-capped at 10.
+**Decision.** `sendAsync()` runs each attempt in its own Queueable with `Database.AllowsCallouts`. On a retryable
+outcome the job enqueues the next attempt: `Retry-After` in seconds is rounded up to minutes; otherwise
+`base * 2^(attempt - 1)` minutes, capped at 10. When the circuit is open, no callout is made and the attempt is
+retried no earlier than the breaker's next trial; since nothing was sent, this is safe for any HTTP method.
 
 **Alternatives.** Scheduled jobs (heavier, limited to 100 scheduled jobs per org); Platform Events with a retry
 counter (needs subscribers and more metadata).
 
-**Consequences.** One Queueable per attempt, subject to the async limits. Callbacks receive the final outcome in the
-Queueable's transaction.
+**Consequences.** One Queueable per attempt, subject to the async limits. Developer Edition and trial orgs cap a
+chain at 5 jobs, so at most 5 async attempts there. Callbacks receive the final outcome in the Queueable's
+transaction. Apex does not allow chaining Queueables in tests, so in tests only the first attempt runs; the engine's
+own tests run each attempt directly.
 
 ## 7. Callwise-generated idempotency keys
 

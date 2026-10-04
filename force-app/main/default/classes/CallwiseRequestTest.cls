@@ -374,17 +374,23 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldReachEngine_WhenCallbackIsValid() {
-        assertInvalidCallback(ValidCallback.class, 'not available');
+    static void shouldEnqueueJob_WhenCallbackIsValid() {
+        new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '').install();
+
+        Test.startTest();
+        Id jobId = Callwise.to(NAMED_CREDENTIAL).get('/a').sendAsync(ValidCallback.class);
+        Test.stopTest();
+
+        Assert.isNotNull(jobId, 'A valid callback reaches the engine and a job is enqueued');
     }
 
     @IsTest
-    static void shouldReachEngine_WhenSendAsyncWithoutCallback() {
+    static void shouldRejectSendAsync_WhenMethodIsMissing() {
         try {
-            Callwise.to(NAMED_CREDENTIAL).get('/a').sendAsync();
+            Callwise.to(NAMED_CREDENTIAL).sendAsync();
             Assert.fail('Expected CallwiseException');
         } catch (CallwiseException e) {
-            Assert.isTrue(e.getMessage().contains('not available'), 'Async engine is not available yet');
+            Assert.areEqual(CallwiseException.FailureReason.INVALID_REQUEST, e.reason, 'Method is required');
         }
     }
 

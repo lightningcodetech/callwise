@@ -19,5 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Circuit breaker per Named Credential (`CallwiseCircuitBreaker`, internal): opens after 5 consecutive failures
   (transport errors, timeouts, 5xx, 408, 429), rejects with `CIRCUIT_OPEN` for 60 s, then lets one trial through.
   State in Platform Cache with a per-transaction fallback; `withoutCircuitBreaker()` bypasses it.
+- `sendAsync()` and `sendAsync(Type callback)`: one Queueable per attempt with real backoff (`Retry-After`, otherwise
+  exponential, at most 10 minutes), the same `Idempotency-Key` on every attempt, the circuit breaker respected, and
+  the final outcome delivered to `Callwise.Callback`.
 - `docs/API.md`.
-- Apex tests (173 tests, 98% coverage; the uncovered lines are Platform Cache reads and writes, which need a partition).
+- Apex tests (187 tests, 98% coverage; the uncovered lines are Platform Cache reads and writes, which need a
+  partition, and the enqueue of a chained async attempt, which Apex tests cannot run).
