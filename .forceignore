@@ -1,0 +1,15 @@
+package.xml
+
+# LWC tooling
+**/jsconfig.json
+**/.eslintrc.json
+**/__tests__/**
+**/tsconfig*.json
+**/*.ts
+**/*.tsbuildinfo
+**/eslint.config.mjs
+**/graphql.config.yml
+
+# Placeholders and IDE caches
+**/.gitkeep
+/.illuminatedCloud/

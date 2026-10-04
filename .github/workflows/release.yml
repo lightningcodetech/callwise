@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --global @salesforce/cli
+
+      - name: Check tag matches sfdx-project.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"; TAG="${TAG%%-*}"
+          PROJECT_VERSION=$(jq -r '.packageDirectories[] | select(.default == true) | .versionNumber' sfdx-project.json | sed 's/\.NEXT$//')
+          if [ "$TAG" != "$PROJECT_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match versionNumber $PROJECT_VERSION in sfdx-project.json"
+            exit 1
+          fi
+
+      - name: Authenticate Dev Hub
+        run: |
+          echo "${{ secrets.DEVHUB_SFDX_AUTH_URL }}" > ./authfile
+          sf org login sfdx-url --sfdx-url-file ./authfile --alias devhub --set-default-dev-hub
+          rm -f ./authfile
+
+      - name: Create package version
+        id: version
+        run: |
+          PACKAGE=$(jq -r '.packageDirectories[] | select(.default == true) | .package' sfdx-project.json)
+          sf package version create --package "$PACKAGE" --installation-key-bypass --code-coverage --wait 60 --json > version.json \
+            || { cat version.json; exit 1; }
+          echo "id=$(jq -r '.result.SubscriberPackageVersionId' version.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Promote (stable tags only)
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: sf package version promote --package "${{ steps.version.outputs.id }}" --no-prompt
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            **CLI**
+            ```bash
+            sf package install --package ${{ steps.version.outputs.id }} --wait 10 --target-org <your-org>
+            ```
+
+            **Browser**
+            - Production / Developer: https://login.salesforce.com/packaging/installPackage.apexp?p0=${{ steps.version.outputs.id }}
+            - Sandbox: https://test.salesforce.com/packaging/installPackage.apexp?p0=${{ steps.version.outputs.id }}

@@ -1,0 +1,9 @@
+node_modules/
+.sf/
+.sfdx/
+coverage/
+test-results/
+package-lock.json
+.idea/
+IlluminatedCloud/
+.illuminatedCloud/
