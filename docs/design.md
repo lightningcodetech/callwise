@@ -14,7 +14,7 @@ are implemented.
 | [4](#4-sync-retries-bounded-by-a-limits-budget)       | Sync retries are immediate and bounded by limits | Implemented |
 | [5](#5-no-automatic-fallback-to-async)                | No automatic fallback to async                   | Implemented |
 | [6](#6-real-backoff-only-in-async)                    | Real backoff only in async                       | Planned     |
-| [7](#7-callwise-generated-idempotency-keys)           | Callwise-generated idempotency keys              | Planned     |
+| [7](#7-callwise-generated-idempotency-keys)           | Callwise-generated idempotency keys              | Implemented |
 | [8](#8-circuit-breaker-in-platform-cache-best-effort) | Circuit breaker in Platform Cache, best effort   | Planned     |
 | [9](#9-responses-are-copied-into-callwiseresponse)    | Responses are copied into `CallwiseResponse`     | Implemented |
 | [10](#10-async-callbacks-by-type)                     | Async callbacks by `Type`                        | Planned     |
@@ -116,14 +116,15 @@ Queueable's transaction.
 **Context.** The most common mistake with idempotency keys is generating a new one on every attempt, which defeats
 the purpose.
 
-**Decision.** `.idempotent()` generates a unique key once, stores it in the request and sends the same key on every
-attempt, sync and async. Caller-provided keys keep working and take precedence.
+**Decision.** `.idempotent()` generates a UUID v4 once, stores it as the request's `Idempotency-Key` header and
+sends the same key on every attempt, sync and async. A non-blank key set by the caller is kept.
 
 **Alternatives.** Leaving key management entirely to callers. Discarded: it is the error-prone part, and Callwise is
 the component that knows when an attempt is a retry.
 
 **Consequences.** The key travels with the serialized request into async jobs, so a retry three Queueables later
-still uses the original key.
+still uses the original key. It only lives in that request: a user clicking twice creates two requests and two keys.
+To deduplicate across transactions, use a business key such as the record Id.
 
 ## 8. Circuit breaker in Platform Cache, best effort
 

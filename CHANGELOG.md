@@ -14,5 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - `send()` with transport-error translation (`TRANSPORT`, `TIMEOUT`, `UNCOMMITTED_WORK`) and immediate synchronous
   retries bounded by the retry policy, `Retry-After` and the transaction's callout budget (`LIMIT_BUDGET` when no
   callout is left for the first attempt).
+- `CallwiseRequest.idempotent()`: generates an `Idempotency-Key` once and reuses it on every attempt, so POST and
+  PATCH can be retried; `getIdempotencyKey()`.
 - `docs/API.md`.
-- Apex tests for the public surface (130 tests, 100% coverage except the private `Callwise` constructor).
+- Apex tests (151 tests, 100% coverage except the private `Callwise` constructor).
