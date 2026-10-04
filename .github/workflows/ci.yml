@@ -13,6 +13,8 @@ concurrency:
 
 env:
     MIN_COVERAGE: 95
+    # Public gist behind the README coverage badge.
+    COVERAGE_GIST_ID: e88955814d3eda9b2eedfc08e26c5749
 
 jobs:
     static-analysis:
@@ -85,6 +87,7 @@ jobs:
                   jq '.result | {tests: .numberTestsTotal, testErrors: .numberTestErrors}' validate.json
 
             - name: Enforce coverage threshold
+              id: coverage
               run: |
                   CLASSES=$(find force-app -name '*.cls' ! -name '*Test.cls' -exec basename {} .cls \; | jq -R . | jq -sc .)
                   COVERAGE=$(jq -r --argjson classes "$CLASSES" '
@@ -94,7 +97,26 @@ jobs:
                     | if (map(.total) | add // 0) == 0 then "N/A"
                       else ((map(.total - .missed) | add) * 100 / (map(.total) | add) | floor) end' validate.json)
                   echo "Coverage of this project's classes: ${COVERAGE}% (min ${MIN_COVERAGE}%)"
+                  echo "percent=${COVERAGE}" >> "$GITHUB_OUTPUT"
                   if [[ "$COVERAGE" =~ ^[0-9]+$ ]] && [ "$COVERAGE" -lt "$MIN_COVERAGE" ]; then
                     echo "::error::Coverage ${COVERAGE}% is below ${MIN_COVERAGE}%"
                     exit 1
                   fi
+
+            # The README coverage badge reads this gist through shields.io. Only main updates it.
+            - name: Publish coverage badge
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+              env:
+                  GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+                  COVERAGE: ${{ steps.coverage.outputs.percent }}
+              run: |
+                  if [ -z "$GIST_TOKEN" ] || ! [[ "$COVERAGE" =~ ^[0-9]+$ ]]; then
+                    echo "::warning::Coverage badge not updated (missing GIST_TOKEN or coverage)."
+                    exit 0
+                  fi
+                  if [ "$COVERAGE" -ge 95 ]; then COLOR=brightgreen; elif [ "$COVERAGE" -ge 85 ]; then COLOR=yellow; else COLOR=red; fi
+                  BADGE=$(jq -nc --arg m "${COVERAGE}%" --arg c "$COLOR" '{schemaVersion: 1, label: "apex coverage", message: $m, color: $c}')
+                  jq -n --arg content "$BADGE" '{files: {"callwise-coverage.json": {content: $content}}}' \
+                    | curl -sf -X PATCH -H "Authorization: Bearer $GIST_TOKEN" -H "Accept: application/vnd.github+json" \
+                        "https://api.github.com/gists/${COVERAGE_GIST_ID}" -d @- > /dev/null
+                  echo "Coverage badge updated: ${COVERAGE}% (${COLOR})"
