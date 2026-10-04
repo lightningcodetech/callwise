@@ -42,11 +42,15 @@ jobs:
         run: sf code-analyzer run --rule-selector Recommended --severity-threshold 2 --view table
 
   org-tests:
-    name: Deploy + Apex tests (scratch org)
+    name: Validate deploy + Apex tests (Dev Hub org)
     needs: static-analysis
     runs-on: ubuntu-latest
     # Fork PRs have no access to secrets: skip the org job for them.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Every run validates against the same org: one at a time.
+    concurrency:
+      group: dev-hub-validation
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,27 +64,37 @@ jobs:
           sf org login sfdx-url --sfdx-url-file ./authfile --alias devhub --set-default-dev-hub
           rm -f ./authfile
 
-      - name: Create scratch org
-        run: sf org create scratch --definition-file config/project-scratch-def.json --alias ci --set-default --duration-days 1 --wait 15
-
-      - name: Deploy source
-        run: sf project deploy start --target-org ci --wait 30
-
-      - name: Run Apex tests
+      # Check-only deploy: nothing is saved in the org. Only this project's test classes run, so the org's own
+      # classes and tests do not affect the result.
+      - name: Validate deploy and run Apex tests
         run: |
-          sf apex run test --target-org ci --test-level RunLocalTests --code-coverage --wait 30 --json > test-result.json \
-            || { jq '.result.tests[]? | select(.Outcome != "Pass") | {MethodName: .FullName, Message: .Message, StackTrace: .StackTrace}' test-result.json; exit 1; }
-          jq '.result.summary' test-result.json
+          if [ -z "$(find force-app -type f ! -name '.gitkeep' | head -1)" ]; then
+            echo "No metadata in force-app: nothing to validate."
+            echo '{}' > validate.json
+            exit 0
+          fi
+          TESTS=$(find force-app -name '*Test.cls' -exec basename {} .cls \; | sort | tr '\n' ' ')
+          if [ -z "$TESTS" ]; then
+            echo "No Apex test classes: validating the deploy only."
+            TEST_ARGS="--test-level NoTestRun"
+          else
+            TEST_ARGS="--test-level RunSpecifiedTests --tests $TESTS"
+          fi
+          sf project deploy validate --source-dir force-app --target-org devhub $TEST_ARGS --wait 30 --json > validate.json \
+            || { jq '.message, (.result.details.componentFailures? // [] | if type == "array" then . else [.] end | .[] | {fullName, problem}), (.result.details.runTestResult.failures? // [] | if type == "array" then . else [.] end | .[] | {test: (.name + "." + .methodName), message, stackTrace})' validate.json; exit 1; }
+          jq '.result | {tests: .numberTestsTotal, testErrors: .numberTestErrors}' validate.json
 
       - name: Enforce coverage threshold
         run: |
-          COVERAGE=$(jq -r '.result.summary.testRunCoverage // "N/A"' test-result.json | tr -d '%')
-          echo "Test run coverage: ${COVERAGE}% (min ${MIN_COVERAGE}%)"
+          CLASSES=$(find force-app -name '*.cls' ! -name '*Test.cls' -exec basename {} .cls \; | jq -R . | jq -sc .)
+          COVERAGE=$(jq -r --argjson classes "$CLASSES" '
+            [.result.details.runTestResult.codeCoverage? // [] | if type == "array" then . else [.] end | .[]
+              | select(.name as $n | $classes | index($n))
+              | {total: (.numLocations | tonumber), missed: (.numLocationsNotCovered | tonumber)}]
+            | if (map(.total) | add // 0) == 0 then "N/A"
+              else ((map(.total - .missed) | add) * 100 / (map(.total) | add) | floor) end' validate.json)
+          echo "Coverage of this project's classes: ${COVERAGE}% (min ${MIN_COVERAGE}%)"
           if [[ "$COVERAGE" =~ ^[0-9]+$ ]] && [ "$COVERAGE" -lt "$MIN_COVERAGE" ]; then
             echo "::error::Coverage ${COVERAGE}% is below ${MIN_COVERAGE}%"
             exit 1
           fi
-
-      - name: Delete scratch org
-        if: always()
-        run: sf org delete scratch --target-org ci --no-prompt || true
