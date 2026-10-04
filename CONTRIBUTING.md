@@ -2,7 +2,8 @@
 
 1. Open an issue first for anything beyond a small fix, so the design can be agreed before code is written.
 2. Fork, branch from `main`, and run `npm ci` (installs the pre-commit hook that formats staged files).
-   Follow the [conventions](#conventions) for branch names, commit messages and PR titles.
+   Follow the [conventions](#conventions) for branch names, commit messages and PR titles, and the
+   [Git workflow](#git-workflow).
 3. Keep changes small and focused. Every Apex change ships with tests that assert behaviour, not just coverage.
 4. Run `npm run prettier:verify && npm run lint && npm run test:unit` locally before opening the PR.
 5. Update `CHANGELOG.md` under `[Unreleased]`.
@@ -36,6 +37,60 @@ has no trailing period and is at most 72 characters.
 PRs are squash-merged, so the PR title becomes the commit on `main`. The `commit-msg` hook and CI enforce these
 rules (`scripts/verify-commit-message.js`).
 
+## Git workflow
+
+Callwise follows [GitHub flow](https://docs.github.com/en/get-started/using-github/github-flow): one long-lived
+branch, `main`, and short-lived topic branches. There is no `develop` branch: only the latest release is supported,
+so the extra branches of git-flow would add work without adding safety.
+
+**`main`** is always releasable. It is protected: changes only arrive through pull requests with green CI, and
+force pushes and deletions are blocked. Every commit on `main` is one squash-merged PR.
+
+**One branch per change.** Start every branch from an up-to-date `main`:
+
+```bash
+git switch main && git pull
+git switch -c feature/circuit-breaker
+```
+
+Keep the branch focused on one change, open the PR as soon as it can be reviewed, and assign it to the maintainer.
+
+**Keeping a branch up to date.** If `main` moves and the branch needs those changes (a conflict, or CI depends on
+them), merge `main` into the branch and push:
+
+```bash
+git pull origin main
+git push
+```
+
+Do not rebase or force-push branches that have an open PR: reviewers lose track of what changed, and the squash
+merge already keeps `main` linear.
+
+**Parallel work.** Two PRs can be open at the same time when they touch different files. When they touch the same
+files, merge the first before starting the second. Do not stack PRs (a PR whose base is another topic branch): if the
+top one is merged first, it lands in the topic branch instead of `main`.
+
+**After the merge** GitHub deletes the remote branch. Clean up locally:
+
+```bash
+git switch main && git pull
+git branch -D feature/circuit-breaker
+git fetch --prune
+```
+
+`-D` is needed because squash merges create a new commit on `main`, so Git does not see the branch as merged.
+Branch names can be reused once the old branch is deleted. Follow-up work on something already merged goes in a new
+branch from `main`.
+
+**Do not rename a branch with an open PR.** GitHub closes pull requests whose head branch is renamed. Fix the PR
+title instead; the branch name only matters while the PR is open.
+
+**Releases** are tags on `main`, not branches. A `release/vX.Y.Z` PR bumps the version and the changelog; after
+merging it, tag `main` (see [Release](#release)).
+
+**Hotfixes** for the latest release use a `hotfix/<name>` branch from `main` and ship as a patch release
+(for example `v0.1.1`). Older releases are not patched.
+
 ## Maintainers
 
 ### One-off setup
@@ -56,11 +111,12 @@ rules (`scripts/verify-commit-message.js`).
 
 ### Release
 
-Bump `versionNumber` in `sfdx-project.json`, move the `[Unreleased]` entries in `CHANGELOG.md` under the new
-version, merge to `main`, then tag:
+Open a `release/vX.Y.Z` PR that bumps `versionNumber` in `sfdx-project.json` and moves the `[Unreleased]` entries
+in `CHANGELOG.md` under the new version. After merging it, tag `main`:
 
 ```bash
-git tag v0.1.0 && git push --tags
+git switch main && git pull
+git tag v0.1.0 && git push origin v0.1.0
 ```
 
 Tags with a suffix (`v0.2.0-beta.1`) create a beta version and a GitHub pre-release; plain tags are promoted.
