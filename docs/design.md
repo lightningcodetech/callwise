@@ -15,7 +15,7 @@ are implemented.
 | [5](#5-no-automatic-fallback-to-async)                | No automatic fallback to async                   | Implemented |
 | [6](#6-real-backoff-only-in-async)                    | Real backoff only in async                       | Planned     |
 | [7](#7-callwise-generated-idempotency-keys)           | Callwise-generated idempotency keys              | Implemented |
-| [8](#8-circuit-breaker-in-platform-cache-best-effort) | Circuit breaker in Platform Cache, best effort   | Planned     |
+| [8](#8-circuit-breaker-in-platform-cache-best-effort) | Circuit breaker in Platform Cache, best effort   | Implemented |
 | [9](#9-responses-are-copied-into-callwiseresponse)    | Responses are copied into `CallwiseResponse`     | Implemented |
 | [10](#10-async-callbacks-by-type)                     | Async callbacks by `Type`                        | Planned     |
 | [11](#11-declarative-mock-shipped-with-the-library)   | Declarative mock shipped with the library        | Implemented |
@@ -132,10 +132,16 @@ To deduplicate across transactions, use a business key such as the record Id.
 state has to be shared across transactions, and Apex has no shared memory.
 
 **Decision.** One breaker per Named Credential: `CLOSED → OPEN` after 5 consecutive failures, `OPEN` for 60 s, then
-`HALF_OPEN` lets one request through. State lives in an org Platform Cache partition behind a `Store` interface.
+`HALF_OPEN` lets one request through. Failures are transport errors, timeouts and 5xx, 408 and 429 responses; a 4xx
+such as 404 means the endpoint answered and counts as a success. State lives in an org Platform Cache partition
+behind a `Store` interface.
 
-When the cache is unavailable (no partition, no capacity, evicted or expired entries), Callwise falls back to a
-transaction-scoped store and warns through the logger. A cache problem never opens the circuit: requests go through.
+When the cache is unavailable (no partition, no capacity), Callwise falls back to a transaction-scoped store and
+writes one `WARN` line to the debug log per transaction. Evicted or expired entries start again as `CLOSED`. A cache
+problem never opens the circuit: requests go through.
+
+The warning goes to the debug log rather than to `Callwise.Logger`: that interface receives one call per attempt, and
+adding a method to it would break every existing implementation.
 
 **Alternatives.** Custom objects or custom settings (DML on every call, row locks, not allowed before callouts in the
 same transaction); opening the circuit when the cache fails (blocks healthy endpoints because of a cache problem).

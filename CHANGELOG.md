@@ -16,5 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   callout is left for the first attempt).
 - `CallwiseRequest.idempotent()`: generates an `Idempotency-Key` once and reuses it on every attempt, so POST and
   PATCH can be retried; `getIdempotencyKey()`.
+- Circuit breaker per Named Credential (`CallwiseCircuitBreaker`, internal): opens after 5 consecutive failures
+  (transport errors, timeouts, 5xx, 408, 429), rejects with `CIRCUIT_OPEN` for 60 s, then lets one trial through.
+  State in Platform Cache with a per-transaction fallback; `withoutCircuitBreaker()` bypasses it.
 - `docs/API.md`.
-- Apex tests (151 tests, 100% coverage except the private `Callwise` constructor).
+- Apex tests (173 tests, 98% coverage; the uncovered lines are Platform Cache reads and writes, which need a partition).

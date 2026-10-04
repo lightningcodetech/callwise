@@ -343,6 +343,109 @@ private class CallwiseEngineTest {
         Assert.areEqual(CallwiseException.FailureReason.TRANSPORT, failure.reason, 'Null message is TRANSPORT');
     }
 
+    // ---------------------------------------------------------------------------------------------------------
+    // Circuit breaker
+    // ---------------------------------------------------------------------------------------------------------
+
+    @IsTest
+    static void shouldThrowCircuitOpen_WithoutCallout_WhenBreakerIsOpen() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
+
+        Test.startTest();
+        for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).send();
+        }
+        try {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(CallwiseException.FailureReason.CIRCUIT_OPEN, e.reason, 'Reason should be CIRCUIT_OPEN');
+        }
+        Test.stopTest();
+
+        Assert.areEqual(
+            CallwiseCircuitBreaker.FAILURE_THRESHOLD,
+            mock.countRequests('GET', '/a'),
+            'No callout while the circuit is open'
+        );
+    }
+
+    @IsTest
+    static void shouldStopRetrying_WhenCircuitOpens() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL)
+            .get('/a')
+            .retry(CallwiseRetryPolicy.transientErrors().maxAttempts(10))
+            .send();
+        Test.stopTest();
+
+        Assert.areEqual(503, response.getStatusCode(), 'Last response is returned');
+        Assert.areEqual(
+            CallwiseCircuitBreaker.FAILURE_THRESHOLD,
+            mock.countRequests('GET', '/a'),
+            'Retries stop when the circuit opens'
+        );
+    }
+
+    @IsTest
+    static void shouldBypassBreaker_WhenDisabled() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenRespond(503, '')
+            .whenRequest('GET', '/b')
+            .thenRespond(200, '')
+            .install();
+        CallwiseCircuitBreaker breaker = new CallwiseCircuitBreaker(NAMED_CREDENTIAL);
+
+        Test.startTest();
+        for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).withoutCircuitBreaker().send();
+        }
+        CallwiseCircuitBreaker.CircuitStatus afterBypassedFailures = breaker.getStatus();
+        for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).send();
+        }
+        CallwiseResponse bypassing = Callwise.to(NAMED_CREDENTIAL).get('/b').withoutCircuitBreaker().send();
+        Test.stopTest();
+
+        Assert.areEqual(
+            CallwiseCircuitBreaker.CircuitStatus.CLOSED,
+            afterBypassedFailures,
+            'Bypassed requests do not update the breaker'
+        );
+        Assert.areEqual(CallwiseCircuitBreaker.CircuitStatus.OPEN, breaker.getStatus(), 'Normal failures open it');
+        Assert.areEqual(200, bypassing.getStatusCode(), 'Bypassed request is sent while the circuit is open');
+        Assert.areEqual(1, mock.countRequests('GET', '/b'), 'One callout for the bypassed request');
+    }
+
+    @IsTest
+    static void shouldCloseBreaker_WhenTrialRequestSucceeds() {
+        new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenRespond(503, '')
+            .whenRequest('GET', '/health')
+            .thenRespond(200, '')
+            .install();
+        CallwiseCircuitBreaker.nowOverride = 1700000000000L;
+
+        Test.startTest();
+        for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).send();
+        }
+        CallwiseCircuitBreaker.nowOverride += CallwiseCircuitBreaker.OPEN_DURATION_MS;
+        CallwiseResponse trial = Callwise.to(NAMED_CREDENTIAL).get('/health').send();
+        Test.stopTest();
+
+        Assert.areEqual(200, trial.getStatusCode(), 'Trial request is sent after the open period');
+        Assert.areEqual(
+            CallwiseCircuitBreaker.CircuitStatus.CLOSED,
+            new CallwiseCircuitBreaker(NAMED_CREDENTIAL).getStatus(),
+            'Successful trial closes the circuit'
+        );
+    }
+
     private static CallwiseException assertTranslated(
         String platformMessage,
         CallwiseException.FailureReason expected

@@ -6,8 +6,8 @@
 Every org ends up hand-rolling the same wrapper around `Http.send()`: retries that duplicate POSTs, loops that
 burn the 100-callout limit, `HttpCalloutMock` classes copied from test to test. Callwise is that wrapper, done once.
 
-> **Status: v0.1 in progress.** The public API is in place and `send()` retries within the limits budget; the
-> circuit breaker and `sendAsync()` are being implemented. See [docs/API.md](docs/API.md).
+> **Status: v0.1 in progress.** The public API is in place; `send()` retries within the limits budget and goes through
+> a circuit breaker per Named Credential. `sendAsync()` is being implemented. See [docs/API.md](docs/API.md).
 
 ## Install
 

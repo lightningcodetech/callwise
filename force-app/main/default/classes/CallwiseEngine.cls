@@ -3,8 +3,8 @@
  *
  * Synchronous sends retry immediately (Apex cannot sleep) while the retry policy allows it and the next attempt
  * fits in the transaction's limits: one callout from the 100 available, and the request's timeout within what
- * remains of the 120 s cumulative callout time. The circuit breaker and the async Queueable are implemented in
- * the next iteration.
+ * remains of the 120 s cumulative callout time. Unless the request opts out, every attempt goes through the circuit
+ * breaker of its Named Credential. The async Queueable is implemented in the next iteration.
  */
 public inherited sharing class CallwiseEngine {
     /** Cumulative callout time the platform allows per transaction, in milliseconds. */
@@ -29,8 +29,9 @@ public inherited sharing class CallwiseEngine {
      *
      * @param request Request to send
      * @return Final response
-     * @throws CallwiseException LIMIT_BUDGET when no callout is left for the first attempt, the last failure when
-     *         every permitted attempt failed, or HTTP_ERROR when throwOnError() is set
+     * @throws CallwiseException CIRCUIT_OPEN when the breaker rejects the first attempt, LIMIT_BUDGET when no callout
+     *         is left for it, the last failure when every permitted attempt failed, or HTTP_ERROR when throwOnError()
+     *         is set
      */
     public CallwiseResponse send(CallwiseRequest request) {
         if (request == null) {
@@ -38,6 +39,12 @@ public inherited sharing class CallwiseEngine {
                 CallwiseException.FailureReason.INVALID_REQUEST,
                 'Request must not be null.'
             );
+        }
+        CallwiseCircuitBreaker breaker = request.isCircuitBreakerEnabled()
+            ? new CallwiseCircuitBreaker(request.getNamedCredential())
+            : null;
+        if (breaker != null && !breaker.allowRequest()) {
+            throw breaker.openCircuitException();
         }
         if (!hasCalloutLeft()) {
             throw CallwiseException.create(
@@ -62,8 +69,9 @@ public inherited sharing class CallwiseEngine {
             } finally {
                 calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
             }
+            breaker?.record(response, failure);
             Callwise.getLogger().log(request, response, failure, attempt);
-        } while (shouldRetry(request, response, failure, attempt));
+        } while (shouldRetry(request, response, failure, attempt) && (breaker == null || breaker.allowRequest()));
 
         if (failure != null) {
             throw failure;

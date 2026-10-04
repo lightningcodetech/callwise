@@ -1,7 +1,7 @@
 # Callwise API
 
-> Status: **v0.1 in progress.** The public surface below is stable. `send()` retries within the limits budget; the
-> circuit breaker and `sendAsync()` land in the next iteration. Sections describing them are marked
+> Status: **v0.1 in progress.** The public surface below is stable. `send()` retries within the limits budget and
+> goes through the circuit breaker; `sendAsync()` lands in the next iteration. Sections describing it are marked
 > _(next iteration)_.
 
 ## Goals
@@ -140,14 +140,25 @@ On a retryable failure it re-enqueues itself with `System.enqueueJob(job, delayM
 - `Retry-After: n` (seconds) → `ceil(n / 60)` minutes, max 10.
 - Otherwise `base * 2^(attempt - 1)` minutes, max 10. With the default base of 1: 1, 2, 4, 8, 10, 10…
 
-## Circuit breaker _(next iteration)_
+## Circuit breaker
 
 One breaker per Named Credential: `CLOSED → OPEN` after 5 consecutive failures, `OPEN` for 60 s, then
-`HALF_OPEN` lets one request through; success closes it, failure reopens it. While open, `send()` throws
-`CIRCUIT_OPEN` without making a callout.
+`HALF_OPEN` lets one request through; success closes it, failure reopens it.
 
-State lives in Platform Cache (org partition, `local.Callwise` by default) behind a `Store` interface. Without a
-partition or capacity, Callwise falls back to a transaction-scoped store and logs a warning.
+- **Failures** are transport errors, timeouts and 5xx, 408 and 429 responses. Any other response (including 4xx such
+  as 404 or 409) counts as a success: the endpoint answered. `UNCOMMITTED_WORK` and `LIMIT_BUDGET` are not
+  recorded.
+- **Every attempt** is recorded, retries included. If the circuit opens during sync retries, the retries stop and the
+  last response or failure is returned.
+- **While open**, `send()` throws `CIRCUIT_OPEN` without making a callout; the message says when the next trial is
+  allowed.
+- **A trial that never reports back** (its transaction failed) is replaced by a new one after another 60 s.
+- `withoutCircuitBreaker()` skips the check and does not record the outcome.
+
+State lives in Platform Cache (org partition, `local.Callwise` by default) behind a `Store` interface, for up to 24 h
+of inactivity; an expired entry simply starts again as `CLOSED`. When the partition is missing or unusable, Callwise
+falls back to a store that only lives for the current transaction and writes one `WARN` line to the debug log per
+transaction. A cache problem never opens the circuit.
 
 **Best effort:** Platform Cache has no atomic compare-and-set, so concurrent transactions can race on the counter.
 The breaker reduces load on a failing endpoint; it does not guarantee an exact threshold.
