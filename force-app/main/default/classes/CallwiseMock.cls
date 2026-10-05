@@ -47,12 +47,6 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     private Route currentRoute;
 
     /**
-     * @description Thrown when the mock is misconfigured or receives a request no route matches.
-     */
-    public class MockException extends Exception {
-    }
-
-    /**
      * @description Starts a route. Follow with one or more thenRespond() / thenThrow() calls.
      *
      * @param method `String` HTTP method, case-insensitive, or '*' for any
@@ -64,8 +58,8 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         if (String.isBlank(method) || String.isBlank(pathPattern)) {
             throw new MockException('whenRequest() requires a method and a path pattern.');
         }
-        currentRoute = new Route(method, pathPattern);
-        routes.add(currentRoute);
+        this.currentRoute = new Route(method, pathPattern);
+        this.routes.add(this.currentRoute);
         return this;
     }
 
@@ -78,7 +72,7 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @throws `MockException` when called before whenRequest()
      */
     public CallwiseMock thenRespond(Integer statusCode, String body) {
-        return thenRespond(statusCode, body, null);
+        return this.thenRespond(statusCode, body, null);
     }
 
     /**
@@ -94,7 +88,7 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         if (statusCode == null) {
             throw new MockException('thenRespond() requires a status code.');
         }
-        requireRoute().steps.add(new Step(statusCode, body, headers, null));
+        this.requireRoute().steps.add(new Step(statusCode, body, headers, null));
         return this;
     }
 
@@ -106,7 +100,7 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @throws `MockException` when called before whenRequest()
      */
     public CallwiseMock thenThrow(String message) {
-        requireRoute().steps.add(new Step(null, null, null, message ?? 'Mocked callout failure'));
+        this.requireRoute().steps.add(new Step(null, null, null, message ?? 'Mocked callout failure'));
         return this;
     }
 
@@ -129,15 +123,15 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @throws `MockException` when no route matches or the route has no responses
      */
     public HttpResponse respond(HttpRequest request) {
-        receivedRequests.add(request);
+        this.receivedRequests.add(request);
         String method = request.getMethod();
-        String pathAndQuery = extractPathAndQuery(request.getEndpoint());
-        Route route = findRoute(method, pathAndQuery);
+        String pathAndQuery = this.extractPathAndQuery(request.getEndpoint());
+        Route route = this.findRoute(method, pathAndQuery);
         if (route == null) {
             throw new MockException(
                 String.format(
                     'No CallwiseMock route matches {0} {1}. Registered routes: {2}',
-                    new List<Object>{ method, pathAndQuery, describeRoutes() }
+                    new List<Object>{ method, pathAndQuery, this.describeRoutes() }
                 )
             );
         }
@@ -150,7 +144,7 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @return `List<HttpRequest>` Copy of every request received, in order
      */
     public List<HttpRequest> getRequests() {
-        return new List<HttpRequest>(receivedRequests);
+        return new List<HttpRequest>(this.receivedRequests);
     }
 
     /**
@@ -163,8 +157,8 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     public Integer countRequests(String method, String pathPattern) {
         Route matcher = new Route(method ?? WILDCARD, pathPattern ?? WILDCARD);
         Integer count = 0;
-        for (HttpRequest request : receivedRequests) {
-            if (matcher.matches(request.getMethod(), extractPathAndQuery(request.getEndpoint()))) {
+        for (HttpRequest request : this.receivedRequests) {
+            if (matcher.matches(request.getMethod(), this.extractPathAndQuery(request.getEndpoint()))) {
                 count++;
             }
         }
@@ -178,10 +172,10 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @throws `MockException` when whenRequest() has not been called
      */
     private Route requireRoute() {
-        if (currentRoute == null) {
+        if (this.currentRoute == null) {
             throw new MockException('Call whenRequest() before thenRespond() or thenThrow().');
         }
-        return currentRoute;
+        return this.currentRoute;
     }
 
     /**
@@ -192,7 +186,7 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @return `Route` Matching route, or null when none matches
      */
     private Route findRoute(String method, String pathAndQuery) {
-        for (Route route : routes) {
+        for (Route route : this.routes) {
             if (route.matches(method, pathAndQuery)) {
                 return route;
             }
@@ -206,11 +200,11 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @return `String` Routes as "METHOD pattern", comma-separated, or 'none'
      */
     private String describeRoutes() {
-        if (routes.isEmpty()) {
+        if (this.routes.isEmpty()) {
             return 'none';
         }
         List<String> descriptions = new List<String>();
-        for (Route route : routes) {
+        for (Route route : this.routes) {
             descriptions.add(route.method + ' ' + route.pathPattern);
         }
         return String.join(descriptions, ', ');
@@ -222,11 +216,17 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @param endpoint `String` Endpoint of the request, e.g. 'callout:Stripe_API/v1/customers?limit=10'
      * @return `String` Path and query string, always starting with '/'
      */
-    private static String extractPathAndQuery(String endpoint) {
+    private String extractPathAndQuery(String endpoint) {
         String remainder = (endpoint ?? '').removeStartIgnoreCase(CALLOUT_PREFIX);
         Integer start = remainder.indexOfAny('/?');
         String pathAndQuery = start < 0 ? '' : remainder.substring(start);
         return pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery;
+    }
+
+    /**
+     * @description Thrown when the mock is misconfigured or receives a request no route matches.
+     */
+    public class MockException extends Exception {
     }
 
     /**
@@ -256,7 +256,7 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
             this.method = method.toUpperCase();
             this.pathPattern = pathPattern;
             this.matchesQuery = pathPattern.contains('?');
-            this.compiledPattern = Pattern.compile(toRegex(pathPattern));
+            this.compiledPattern = Pattern.compile(this.toRegex(pathPattern));
         }
 
         /**
@@ -267,11 +267,11 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
          * @return `Boolean` True when method and pattern match
          */
         private Boolean matches(String requestMethod, String pathAndQuery) {
-            if (method != WILDCARD && !method.equalsIgnoreCase(requestMethod)) {
+            if (this.method != WILDCARD && !this.method.equalsIgnoreCase(requestMethod)) {
                 return false;
             }
-            String target = matchesQuery ? pathAndQuery : pathAndQuery.substringBefore('?');
-            return compiledPattern.matcher(target).matches();
+            String target = this.matchesQuery ? pathAndQuery : pathAndQuery.substringBefore('?');
+            return this.compiledPattern.matcher(target).matches();
         }
 
         /**
@@ -281,13 +281,17 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
          * @throws `MockException` when the route has no steps
          */
         private Step nextStep() {
-            if (steps.isEmpty()) {
+            if (this.steps.isEmpty()) {
                 throw new MockException(
-                    'Route ' + method + ' ' + pathPattern + ' has no responses; add thenRespond() or thenThrow().'
+                    'Route ' +
+                        this.method +
+                        ' ' +
+                        this.pathPattern +
+                        ' has no responses; add thenRespond() or thenThrow().'
                 );
             }
-            Step step = steps[Math.min(cursor, steps.size() - 1)];
-            cursor++;
+            Step step = this.steps[Math.min(this.cursor, this.steps.size() - 1)];
+            this.cursor++;
             return step;
         }
 
@@ -341,15 +345,15 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
          * @throws `CalloutException` when the step is a failure
          */
         private HttpResponse toHttpResponse() {
-            if (failureMessage != null) {
-                throw new CalloutException(failureMessage);
+            if (this.failureMessage != null) {
+                throw new CalloutException(this.failureMessage);
             }
             HttpResponse response = new HttpResponse();
-            response.setStatusCode(statusCode);
-            response.setStatus(REASON_PHRASES.get(statusCode) ?? '');
-            response.setBody(body ?? '');
-            for (String name : headers.keySet()) {
-                response.setHeader(name, headers.get(name));
+            response.setStatusCode(this.statusCode);
+            response.setStatus(REASON_PHRASES.get(this.statusCode) ?? '');
+            response.setBody(this.body ?? '');
+            for (String name : this.headers.keySet()) {
+                response.setHeader(name, this.headers.get(name));
             }
             return response;
         }

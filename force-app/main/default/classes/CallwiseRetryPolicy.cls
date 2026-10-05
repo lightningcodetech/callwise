@@ -76,7 +76,7 @@ public inherited sharing class CallwiseRetryPolicy {
                 'maxAttempts must be between 1 and ' + MAX_ATTEMPTS_LIMIT + ', got ' + attempts + '.'
             );
         }
-        attemptLimit = attempts;
+        this.attemptLimit = attempts;
         return this;
     }
 
@@ -91,7 +91,7 @@ public inherited sharing class CallwiseRetryPolicy {
         if (statusCodes == null) {
             throw CallwiseException.invalidRequest('retryOn() requires a non-null set of status codes.');
         }
-        retryableStatusCodes = statusCodes.clone();
+        this.retryableStatusCodes = statusCodes.clone();
         return this;
     }
 
@@ -102,7 +102,7 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `CallwiseRetryPolicy` This policy
      */
     public CallwiseRetryPolicy allowNonIdempotent() {
-        nonIdempotentAllowed = true;
+        this.nonIdempotentAllowed = true;
         return this;
     }
 
@@ -120,7 +120,7 @@ public inherited sharing class CallwiseRetryPolicy {
                 'asyncBaseDelay must be between 0 and ' + MAX_ASYNC_DELAY_MINUTES + ', got ' + minutes + '.'
             );
         }
-        asyncBaseDelayMinutes = minutes;
+        this.asyncBaseDelayMinutes = minutes;
         return this;
     }
 
@@ -130,7 +130,7 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `Integer` Total attempts including the first one
      */
     public Integer getMaxAttempts() {
-        return attemptLimit;
+        return this.attemptLimit;
     }
 
     /**
@@ -139,7 +139,7 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `Set<Integer>` Copy of the status codes that trigger a retry
      */
     public Set<Integer> getRetryableStatusCodes() {
-        return retryableStatusCodes.clone();
+        return this.retryableStatusCodes.clone();
     }
 
     /**
@@ -148,7 +148,7 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `Boolean` True when TRANSPORT and TIMEOUT failures are retried
      */
     public Boolean retriesTransportErrors() {
-        return retryTransportErrors;
+        return this.retryTransportErrors;
     }
 
     /**
@@ -157,7 +157,7 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `Boolean` True when POST/PATCH are retried without an Idempotency-Key
      */
     public Boolean allowsNonIdempotent() {
-        return nonIdempotentAllowed;
+        return this.nonIdempotentAllowed;
     }
 
     /**
@@ -166,7 +166,7 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `Integer` Base delay for async retries, in minutes
      */
     public Integer getAsyncBaseDelayMinutes() {
-        return asyncBaseDelayMinutes;
+        return this.asyncBaseDelayMinutes;
     }
 
     /**
@@ -179,13 +179,13 @@ public inherited sharing class CallwiseRetryPolicy {
      * @return `Boolean` True when the policy allows another attempt
      */
     public Boolean isRetryable(CallwiseRequest request, CallwiseResponse response, CallwiseException failure) {
-        if (request == null || (!request.isIdempotent() && !nonIdempotentAllowed)) {
+        if (request == null || (!request.isIdempotent() && !this.nonIdempotentAllowed)) {
             return false;
         }
         if (failure != null) {
-            return retryTransportErrors && failure.isTransportFailure();
+            return this.retryTransportErrors && failure.isTransportFailure();
         }
-        return response != null && retryableStatusCodes.contains(response.getStatusCode());
+        return response != null && this.retryableStatusCodes.contains(response.getStatusCode());
     }
 
     /**
@@ -204,6 +204,6 @@ public inherited sharing class CallwiseRetryPolicy {
         }
         // Attempts up to 1 wait the base delay. Double arithmetic cannot overflow for large attempt numbers.
         Integer doublings = Math.max((attempt ?? 1) - 1, 0);
-        return Math.min(asyncBaseDelayMinutes * Math.pow(2, doublings), MAX_ASYNC_DELAY_MINUTES).intValue();
+        return Math.min(this.asyncBaseDelayMinutes * Math.pow(2, doublings), MAX_ASYNC_DELAY_MINUTES).intValue();
     }
 }

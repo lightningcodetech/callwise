@@ -12,6 +12,11 @@
  * }
  */
 public inherited sharing class CallwiseException extends Exception {
+    /** @description Failure category. Never null on exceptions created through the factories. */
+    public FailureReason reason { get; private set; }
+    /** @description Response that caused the failure. Only set when reason is HTTP_ERROR. */
+    public CallwiseResponse response { get; private set; }
+
     /**
      * @description Why the call failed.
      */
@@ -33,12 +38,6 @@ public inherited sharing class CallwiseException extends Exception {
         /** @description The server answered with a non-2xx status and the request used throwOnError(). */
         HTTP_ERROR
     }
-
-    /** @description Failure category. Never null on exceptions created through the factories. */
-    public FailureReason reason { get; private set; }
-
-    /** @description Response that caused the failure. Only set when reason is HTTP_ERROR. */
-    public CallwiseResponse response { get; private set; }
 
     /**
      * @description Creates an exception with the given reason.
@@ -105,6 +104,6 @@ public inherited sharing class CallwiseException extends Exception {
      * @return `Boolean` True for TRANSPORT and TIMEOUT
      */
     public Boolean isTransportFailure() {
-        return reason == FailureReason.TRANSPORT || reason == FailureReason.TIMEOUT;
+        return this.reason == FailureReason.TRANSPORT || this.reason == FailureReason.TIMEOUT;
     }
 }

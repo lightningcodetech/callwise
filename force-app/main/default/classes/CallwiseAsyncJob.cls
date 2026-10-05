@@ -50,8 +50,9 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
      * @param context `QueueableContext` Queueable context; not used
      */
     public void execute(QueueableContext context) {
-        CallwiseRetryPolicy policy = request.getRetryPolicy();
-        CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(request);
+        CallwiseRetryPolicy policy = this.request.getRetryPolicy();
+        CallwiseEngine engine = new CallwiseEngine();
+        CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(this.request);
         CallwiseEngine.Outcome outcome;
         Boolean retryable;
         Integer nextDelayMinutes;
@@ -60,22 +61,22 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
             outcome.failure = breaker.openCircuitException();
             retryable = true;
             nextDelayMinutes = Math.min(
-                Math.max(policy.asyncDelayMinutes(attempt, null), minutesUntil(breaker.secondsUntilTrial())),
+                Math.max(policy.asyncDelayMinutes(this.attempt, null), this.minutesUntil(breaker.secondsUntilTrial())),
                 CallwiseRetryPolicy.MAX_ASYNC_DELAY_MINUTES
             );
         } else {
-            outcome = CallwiseEngine.attempt(request, breaker, attempt, System.currentTimeMillis());
-            retryable = policy.isRetryable(request, outcome.response, outcome.failure);
-            nextDelayMinutes = policy.asyncDelayMinutes(attempt, outcome.response);
+            outcome = engine.attempt(this.request, breaker, this.attempt, System.currentTimeMillis());
+            retryable = policy.isRetryable(this.request, outcome.response, outcome.failure);
+            nextDelayMinutes = policy.asyncDelayMinutes(this.attempt, outcome.response);
         }
 
-        if (retryable && attempt < policy.getMaxAttempts() && CallwiseEngine.hasQueueableLeft()) {
-            CallwiseAsyncJob next = new CallwiseAsyncJob(request, callbackClassName, attempt + 1);
+        if (retryable && this.attempt < policy.getMaxAttempts() && engine.hasQueueableLeft()) {
+            CallwiseAsyncJob next = new CallwiseAsyncJob(this.request, this.callbackClassName, this.attempt + 1);
             next.delayMinutes = nextDelayMinutes;
-            enqueue(next);
+            this.enqueue(next);
             return;
         }
-        deliver(outcome);
+        this.deliver(outcome);
     }
 
     /**
@@ -85,16 +86,16 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
      * @param outcome `CallwiseEngine.Outcome` Outcome of the last attempt
      */
     private void deliver(CallwiseEngine.Outcome outcome) {
-        if (callbackClassName == null) {
+        if (this.callbackClassName == null) {
             return;
         }
-        Callwise.Callback callback = (Callwise.Callback) Type.forName(callbackClassName).newInstance();
+        Callwise.Callback callback = (Callwise.Callback) Type.forName(this.callbackClassName).newInstance();
         if (outcome.failure != null) {
-            callback.onFailure(request, outcome.failure);
-        } else if (request.isThrowOnError() && !outcome.response.isSuccess()) {
-            callback.onFailure(request, CallwiseException.fromResponse(outcome.response));
+            callback.onFailure(this.request, outcome.failure);
+        } else if (this.request.isThrowOnError() && !outcome.response.isSuccess()) {
+            callback.onFailure(this.request, CallwiseException.fromResponse(outcome.response));
         } else {
-            callback.onResponse(request, outcome.response);
+            callback.onResponse(this.request, outcome.response);
         }
     }
 
@@ -104,7 +105,7 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
      *
      * @param next `CallwiseAsyncJob` Job for the next attempt
      */
-    private static void enqueue(CallwiseAsyncJob next) {
+    private void enqueue(CallwiseAsyncJob next) {
         if (Test.isRunningTest()) {
             chainedInTests.add(next);
             return;
@@ -118,7 +119,7 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
      * @param seconds `Long` Seconds to wait
      * @return `Integer` Minutes to wait
      */
-    private static Integer minutesUntil(Long seconds) {
+    private Integer minutesUntil(Long seconds) {
         return Math.ceil((Double) seconds / SECONDS_PER_MINUTE).intValue();
     }
 }

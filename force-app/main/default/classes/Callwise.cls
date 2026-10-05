@@ -22,45 +22,6 @@ public inherited sharing class Callwise {
     private static String cachePartition = DEFAULT_CACHE_PARTITION;
 
     /**
-     * @description Receives one call per attempt. Implementations must not throw and should not log bodies unless the
-     * subscriber org has decided that is acceptable (bodies often carry PII).
-     */
-    public interface Logger {
-        /**
-         * @description Records one attempt.
-         *
-         * @param request `CallwiseRequest` Request being sent
-         * @param response `CallwiseResponse` Response of this attempt, or null when it failed with an exception
-         * @param failure `CallwiseException` Exception raised by this attempt, or null when a response was received
-         * @param attempt `Integer` Attempt number, starting at 1
-         */
-        void log(CallwiseRequest request, CallwiseResponse response, CallwiseException failure, Integer attempt);
-    }
-
-    /**
-     * @description Receives the outcome of sendAsync(). Implementations need a public no-argument constructor. They run
-     * in the Queueable's transaction, so they may perform DML.
-     */
-    public interface Callback {
-        /**
-         * @description Called with the final response, whatever its status, unless the request used throwOnError() and
-         * the status was not 2xx (then onFailure() is called with reason HTTP_ERROR).
-         *
-         * @param request `CallwiseRequest` Request that was sent
-         * @param response `CallwiseResponse` Final response
-         */
-        void onResponse(CallwiseRequest request, CallwiseResponse response);
-
-        /**
-         * @description Called when the request failed after all permitted attempts.
-         *
-         * @param request `CallwiseRequest` Request that was sent
-         * @param failure `CallwiseException` Final failure
-         */
-        void onFailure(CallwiseRequest request, CallwiseException failure);
-    }
-
-    /**
      * @description Not instantiable: Callwise only exposes static methods.
      */
     private Callwise() {
@@ -121,6 +82,45 @@ public inherited sharing class Callwise {
     }
 
     /**
+     * @description Receives one call per attempt. Implementations must not throw and should not log bodies unless the
+     * subscriber org has decided that is acceptable (bodies often carry PII).
+     */
+    public interface Logger {
+        /**
+         * @description Records one attempt.
+         *
+         * @param request `CallwiseRequest` Request being sent
+         * @param response `CallwiseResponse` Response of this attempt, or null when it failed with an exception
+         * @param failure `CallwiseException` Exception raised by this attempt, or null when a response was received
+         * @param attempt `Integer` Attempt number, starting at 1
+         */
+        void log(CallwiseRequest request, CallwiseResponse response, CallwiseException failure, Integer attempt);
+    }
+
+    /**
+     * @description Receives the outcome of sendAsync(). Implementations need a public no-argument constructor. They run
+     * in the Queueable's transaction, so they may perform DML.
+     */
+    public interface Callback {
+        /**
+         * @description Called with the final response, whatever its status, unless the request used throwOnError() and
+         * the status was not 2xx (then onFailure() is called with reason HTTP_ERROR).
+         *
+         * @param request `CallwiseRequest` Request that was sent
+         * @param response `CallwiseResponse` Final response
+         */
+        void onResponse(CallwiseRequest request, CallwiseResponse response);
+
+        /**
+         * @description Called when the request failed after all permitted attempts.
+         *
+         * @param request `CallwiseRequest` Request that was sent
+         * @param failure `CallwiseException` Final failure
+         */
+        void onFailure(CallwiseRequest request, CallwiseException failure);
+    }
+
+    /**
      * @description Default logger: does nothing.
      */
     public class NoOpLogger implements Logger {
@@ -178,7 +178,7 @@ public inherited sharing class Callwise {
          * @return `DebugLogger` This logger
          */
         public DebugLogger includeBodies() {
-            bodiesIncluded = true;
+            this.bodiesIncluded = true;
             return this;
         }
 
@@ -197,7 +197,7 @@ public inherited sharing class Callwise {
             CallwiseException failure,
             Integer attempt
         ) {
-            System.debug(level, format(request, response, failure, attempt));
+            System.debug(this.level, this.format(request, response, failure, attempt));
         }
 
         /**
@@ -229,7 +229,7 @@ public inherited sharing class Callwise {
                 parts.add('failure=' + failure.reason);
                 parts.add('message=' + failure.getMessage());
             }
-            if (bodiesIncluded) {
+            if (this.bodiesIncluded) {
                 parts.add('requestBody=' + request?.getBody());
                 parts.add('responseBody=' + response?.getBody());
             }

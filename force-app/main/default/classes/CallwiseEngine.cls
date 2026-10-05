@@ -23,121 +23,12 @@ public inherited sharing class CallwiseEngine {
      */
     @TestVisible
     private static Long calloutMsUsed = 0;
-
     /** @description Replaces Limits.getLimitCallouts() in tests, so the callout budget can be exhausted cheaply. */
     @TestVisible
     private static Integer calloutLimitOverride;
-
     /** @description Replaces Limits.getLimitQueueableJobs() in tests. */
     @TestVisible
     private static Integer queueableLimitOverride;
-
-    /**
-     * @description Result of a single attempt: exactly one of response and failure is set.
-     */
-    public class Outcome {
-        /** @description Response of the attempt, or null when it failed. */
-        public CallwiseResponse response;
-        /** @description Failure of the attempt, or null when a response was received. */
-        public CallwiseException failure;
-    }
-
-    /**
-     * @description Sends the request synchronously, retrying while the policy and the limits budget allow it.
-     *
-     * @param request `CallwiseRequest` Request to send
-     * @return `CallwiseResponse` Final response
-     * @throws `CallwiseException` CIRCUIT_OPEN when the breaker rejects the first attempt, LIMIT_BUDGET when no callout
-     * is left for it, the last failure when every permitted attempt failed, or HTTP_ERROR when throwOnError() is set
-     */
-    public CallwiseResponse send(CallwiseRequest request) {
-        requireRequest(request);
-        CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(request);
-        if (breaker != null && !breaker.allowRequest()) {
-            throw breaker.openCircuitException();
-        }
-        if (!hasCalloutLeft()) {
-            throw limitBudget(
-                'No callouts left in this transaction (' + Limits.getCallouts() + ' used). Use sendAsync().'
-            );
-        }
-        Long startedAt = System.currentTimeMillis();
-        Integer attempt = 0;
-        Outcome outcome;
-        do {
-            attempt++;
-            outcome = attempt(request, breaker, attempt, startedAt);
-        } while (
-            shouldRetry(request, outcome.response, outcome.failure, attempt) &&
-            (breaker == null || breaker.allowRequest())
-        );
-
-        if (outcome.failure != null) {
-            throw outcome.failure;
-        }
-        if (request.isThrowOnError() && !outcome.response.isSuccess()) {
-            throw CallwiseException.fromResponse(outcome.response);
-        }
-        return outcome.response;
-    }
-
-    /**
-     * @description Enqueues the request for asynchronous delivery. Each attempt runs in its own CallwiseAsyncJob.
-     *
-     * @param request `CallwiseRequest` Request to send
-     * @param callbackClassName `String` Name of a Callwise.Callback implementation, or null for no callback
-     * @return `Id` Id of the enqueued job
-     * @throws `CallwiseException` INVALID_REQUEST when request is null, LIMIT_BUDGET when no Queueable job can be added
-     * in this transaction
-     */
-    public Id sendAsync(CallwiseRequest request, String callbackClassName) {
-        requireRequest(request);
-        if (!hasQueueableLeft()) {
-            throw limitBudget(
-                'No Queueable jobs left in this transaction (' + Limits.getQueueableJobs() + ' enqueued).'
-            );
-        }
-        return System.enqueueJob(new CallwiseAsyncJob(request, callbackClassName, 1));
-    }
-
-    /**
-     * @description Makes one attempt: one callout, recorded in the breaker (when given) and logged.
-     *
-     * @param request `CallwiseRequest` Request to send
-     * @param breaker `CallwiseCircuitBreaker` Breaker of the request's Named Credential, or null when it is bypassed
-     * @param attempt `Integer` Attempt number, starting at 1
-     * @param startedAt `Long` When the first attempt of this send started, for CallwiseResponse.getElapsedMs()
-     * @return `Outcome` Response or failure of the attempt
-     */
-    public static Outcome attempt(
-        CallwiseRequest request,
-        CallwiseCircuitBreaker breaker,
-        Integer attempt,
-        Long startedAt
-    ) {
-        Outcome outcome = new Outcome();
-        Long attemptStartedAt = System.currentTimeMillis();
-        try {
-            HttpResponse rawResponse = new Http().send(request.toHttpRequest());
-            outcome.response = new CallwiseResponse(rawResponse, attempt, System.currentTimeMillis() - startedAt);
-        } catch (CalloutException e) {
-            outcome.failure = translate(e);
-        } finally {
-            calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
-        }
-        breaker?.record(outcome.response, outcome.failure);
-        Callwise.getLogger().log(request, outcome.response, outcome.failure, attempt);
-        return outcome;
-    }
-
-    /**
-     * @description Checks the Queueable limit of the transaction: 50 from synchronous code, 1 from a Queueable.
-     *
-     * @return `Boolean` True when another Queueable job can be enqueued in this transaction
-     */
-    public static Boolean hasQueueableLeft() {
-        return Limits.getQueueableJobs() < (queueableLimitOverride ?? Limits.getLimitQueueableJobs());
-    }
 
     /**
      * @description Maps a platform CalloutException to a CallwiseException reason, preserving the cause.
@@ -162,6 +53,98 @@ public inherited sharing class CallwiseEngine {
     }
 
     /**
+     * @description Sends the request synchronously, retrying while the policy and the limits budget allow it.
+     *
+     * @param request `CallwiseRequest` Request to send
+     * @return `CallwiseResponse` Final response
+     * @throws `CallwiseException` CIRCUIT_OPEN when the breaker rejects the first attempt, LIMIT_BUDGET when no callout
+     * is left for it, the last failure when every permitted attempt failed, or HTTP_ERROR when throwOnError() is set
+     */
+    public CallwiseResponse send(CallwiseRequest request) {
+        this.requireRequest(request);
+        CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(request);
+        if (breaker != null && !breaker.allowRequest()) {
+            throw breaker.openCircuitException();
+        }
+        if (!this.hasCalloutLeft()) {
+            throw this.limitBudget(
+                'No callouts left in this transaction (' + Limits.getCallouts() + ' used). Use sendAsync().'
+            );
+        }
+        Long startedAt = System.currentTimeMillis();
+        Integer attempt = 0;
+        Outcome outcome;
+        do {
+            attempt++;
+            outcome = this.attempt(request, breaker, attempt, startedAt);
+        } while (
+            this.shouldRetry(request, outcome.response, outcome.failure, attempt) &&
+            (breaker == null || breaker.allowRequest())
+        );
+
+        if (outcome.failure != null) {
+            throw outcome.failure;
+        }
+        if (request.isThrowOnError() && !outcome.response.isSuccess()) {
+            throw CallwiseException.fromResponse(outcome.response);
+        }
+        return outcome.response;
+    }
+
+    /**
+     * @description Enqueues the request for asynchronous delivery. Each attempt runs in its own CallwiseAsyncJob.
+     *
+     * @param request `CallwiseRequest` Request to send
+     * @param callbackClassName `String` Name of a Callwise.Callback implementation, or null for no callback
+     * @return `Id` Id of the enqueued job
+     * @throws `CallwiseException` INVALID_REQUEST when request is null, LIMIT_BUDGET when no Queueable job can be added
+     * in this transaction
+     */
+    public Id sendAsync(CallwiseRequest request, String callbackClassName) {
+        this.requireRequest(request);
+        if (!this.hasQueueableLeft()) {
+            throw this.limitBudget(
+                'No Queueable jobs left in this transaction (' + Limits.getQueueableJobs() + ' enqueued).'
+            );
+        }
+        return System.enqueueJob(new CallwiseAsyncJob(request, callbackClassName, 1));
+    }
+
+    /**
+     * @description Makes one attempt: one callout, recorded in the breaker (when given) and logged.
+     *
+     * @param request `CallwiseRequest` Request to send
+     * @param breaker `CallwiseCircuitBreaker` Breaker of the request's Named Credential, or null when it is bypassed
+     * @param attempt `Integer` Attempt number, starting at 1
+     * @param startedAt `Long` When the first attempt of this send started, for CallwiseResponse.getElapsedMs()
+     * @return `Outcome` Response or failure of the attempt
+     */
+    public Outcome attempt(CallwiseRequest request, CallwiseCircuitBreaker breaker, Integer attempt, Long startedAt) {
+        Outcome outcome = new Outcome();
+        Long attemptStartedAt = System.currentTimeMillis();
+        try {
+            HttpResponse rawResponse = new Http().send(request.toHttpRequest());
+            outcome.response = new CallwiseResponse(rawResponse, attempt, System.currentTimeMillis() - startedAt);
+        } catch (CalloutException e) {
+            outcome.failure = translate(e);
+        } finally {
+            calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
+        }
+        breaker?.record(outcome.response, outcome.failure);
+        Callwise.getLogger().log(request, outcome.response, outcome.failure, attempt);
+        return outcome;
+    }
+
+    /**
+     * @description Checks the Queueable limit of the transaction: 50 from synchronous code, 1 from a Queueable.
+     *
+     * @return `Boolean` True when another Queueable job can be enqueued in this transaction
+     */
+    public Boolean hasQueueableLeft() {
+        return Limits.getQueueableJobs() < (queueableLimitOverride ?? Limits.getLimitQueueableJobs());
+    }
+
+    /**
      * @description Decides whether a synchronous send makes another attempt: the policy allows it, the server did not
      * ask to wait (Retry-After greater than 0), and the attempt fits in the transaction: one callout left and the
      * request timeout within the remaining callout time.
@@ -172,7 +155,7 @@ public inherited sharing class CallwiseEngine {
      * @param attempt `Integer` Number of the last attempt
      * @return `Boolean` True when another attempt should be made now
      */
-    private static Boolean shouldRetry(
+    private Boolean shouldRetry(
         CallwiseRequest request,
         CallwiseResponse response,
         CallwiseException failure,
@@ -187,7 +170,7 @@ public inherited sharing class CallwiseEngine {
         if (retryAfterSeconds != null && retryAfterSeconds > 0) {
             return false;
         }
-        return hasCalloutLeft() && calloutMsUsed + request.getTimeoutMs() <= MAX_CALLOUT_TIME_MS;
+        return this.hasCalloutLeft() && calloutMsUsed + request.getTimeoutMs() <= MAX_CALLOUT_TIME_MS;
     }
 
     /**
@@ -195,7 +178,7 @@ public inherited sharing class CallwiseEngine {
      *
      * @return `Boolean` True when another callout can be made
      */
-    private static Boolean hasCalloutLeft() {
+    private Boolean hasCalloutLeft() {
         return Limits.getCallouts() < (calloutLimitOverride ?? Limits.getLimitCallouts());
     }
 
@@ -205,7 +188,7 @@ public inherited sharing class CallwiseEngine {
      * @param request `CallwiseRequest` Request to check
      * @throws `CallwiseException` INVALID_REQUEST when request is null
      */
-    private static void requireRequest(CallwiseRequest request) {
+    private void requireRequest(CallwiseRequest request) {
         if (request == null) {
             throw CallwiseException.invalidRequest('Request must not be null.');
         }
@@ -217,7 +200,17 @@ public inherited sharing class CallwiseEngine {
      * @param message `String` Which limit is exhausted
      * @return `CallwiseException` Exception, ready to throw
      */
-    private static CallwiseException limitBudget(String message) {
+    private CallwiseException limitBudget(String message) {
         return CallwiseException.create(CallwiseException.FailureReason.LIMIT_BUDGET, message);
+    }
+
+    /**
+     * @description Result of a single attempt: exactly one of response and failure is set.
+     */
+    public class Outcome {
+        /** @description Response of the attempt, or null when it failed. */
+        public CallwiseResponse response;
+        /** @description Failure of the attempt, or null when a response was received. */
+        public CallwiseException failure;
     }
 }
