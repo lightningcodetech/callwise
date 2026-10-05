@@ -1,6 +1,6 @@
 # Callwise API
 
-> Applies to **v0.1.0**. While Callwise is in `0.x`, minor versions may change the API; see the
+> Applies to **v0.2.0**. While Callwise is in `0.x`, minor versions may change the API; see the
 > [CHANGELOG](../CHANGELOG.md).
 
 ## Goals
