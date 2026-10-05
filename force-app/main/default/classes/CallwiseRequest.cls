@@ -84,7 +84,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest get(String path) {
-        return withMethod('GET', path);
+        return this.withMethod('GET', path);
     }
 
     /**
@@ -94,7 +94,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest head(String path) {
-        return withMethod('HEAD', path);
+        return this.withMethod('HEAD', path);
     }
 
     /**
@@ -104,7 +104,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest post(String path) {
-        return withMethod('POST', path);
+        return this.withMethod('POST', path);
     }
 
     /**
@@ -114,7 +114,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest put(String path) {
-        return withMethod('PUT', path);
+        return this.withMethod('PUT', path);
     }
 
     /**
@@ -124,7 +124,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest patch(String path) {
-        return withMethod('PATCH', path);
+        return this.withMethod('PATCH', path);
     }
 
     /**
@@ -134,7 +134,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest del(String path) {
-        return withMethod('DELETE', path);
+        return this.withMethod('DELETE', path);
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -153,8 +153,8 @@ public inherited sharing class CallwiseRequest {
         if (String.isBlank(name)) {
             throw CallwiseException.invalidRequest('Header name must not be blank.');
         }
-        headers.remove(findHeaderName(name));
-        headers.put(name, value ?? '');
+        this.headers.remove(this.findHeaderName(name));
+        this.headers.put(name, value ?? '');
         return this;
     }
 
@@ -169,8 +169,8 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest idempotent() {
-        if (getIdempotencyKey() == null) {
-            header(IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
+        if (this.getIdempotencyKey() == null) {
+            this.header(IDEMPOTENCY_KEY_HEADER, UUID.randomUUID().toString());
         }
         return this;
     }
@@ -187,7 +187,7 @@ public inherited sharing class CallwiseRequest {
         if (String.isBlank(name)) {
             throw CallwiseException.invalidRequest('Query parameter name must not be blank.');
         }
-        queryParameters.add(EncodingUtil.urlEncode(name, UTF8) + '=' + EncodingUtil.urlEncode(value ?? '', UTF8));
+        this.queryParameters.add(EncodingUtil.urlEncode(name, UTF8) + '=' + EncodingUtil.urlEncode(value ?? '', UTF8));
         return this;
     }
 
@@ -212,8 +212,8 @@ public inherited sharing class CallwiseRequest {
      */
     public CallwiseRequest jsonBody(Object payload) {
         this.requestBody = JSON.serialize(payload, true);
-        if (findHeaderName(CONTENT_TYPE_HEADER) == null) {
-            headers.put(CONTENT_TYPE_HEADER, JSON_CONTENT_TYPE);
+        if (this.findHeaderName(CONTENT_TYPE_HEADER) == null) {
+            this.headers.put(CONTENT_TYPE_HEADER, JSON_CONTENT_TYPE);
         }
         return this;
     }
@@ -236,7 +236,7 @@ public inherited sharing class CallwiseRequest {
                 'timeout must be between 1 and ' + MAX_TIMEOUT_MS + ' ms, got ' + milliseconds + '.'
             );
         }
-        timeoutMs = milliseconds;
+        this.timeoutMs = milliseconds;
         return this;
     }
 
@@ -253,7 +253,7 @@ public inherited sharing class CallwiseRequest {
                 'retry() requires a policy. Use CallwiseRetryPolicy.none() to disable retries.'
             );
         }
-        retryPolicy = policy;
+        this.retryPolicy = policy;
         return this;
     }
 
@@ -264,7 +264,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest withoutCircuitBreaker() {
-        circuitBreakerEnabled = false;
+        this.circuitBreakerEnabled = false;
         return this;
     }
 
@@ -274,7 +274,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRequest` This request
      */
     public CallwiseRequest throwOnError() {
-        throwOnErrorEnabled = true;
+        this.throwOnErrorEnabled = true;
         return this;
     }
 
@@ -290,7 +290,7 @@ public inherited sharing class CallwiseRequest {
      * HTTP_ERROR when throwOnError() is set
      */
     public CallwiseResponse send() {
-        requireMethod();
+        this.requireMethod();
         return new CallwiseEngine().send(this);
     }
 
@@ -302,7 +302,7 @@ public inherited sharing class CallwiseRequest {
      * @throws `CallwiseException` INVALID_REQUEST when the request is incomplete
      */
     public Id sendAsync() {
-        requireMethod();
+        this.requireMethod();
         return new CallwiseEngine().sendAsync(this, null);
     }
 
@@ -316,8 +316,8 @@ public inherited sharing class CallwiseRequest {
      * callback
      */
     public Id sendAsync(Type callbackType) {
-        requireMethod();
-        validateCallbackType(callbackType);
+        this.requireMethod();
+        this.validateCallbackType(callbackType);
         return new CallwiseEngine().sendAsync(this, callbackType.getName());
     }
 
@@ -331,7 +331,7 @@ public inherited sharing class CallwiseRequest {
      * @return `String` API name of the Named Credential
      */
     public String getNamedCredential() {
-        return namedCredential;
+        return this.namedCredential;
     }
 
     /**
@@ -340,7 +340,7 @@ public inherited sharing class CallwiseRequest {
      * @return `String` HTTP method in upper case, or null when not set yet
      */
     public String getMethod() {
-        return method;
+        return this.method;
     }
 
     /**
@@ -349,7 +349,7 @@ public inherited sharing class CallwiseRequest {
      * @return `String` Path relative to the Named Credential, without the parameters added through param()
      */
     public String getPath() {
-        return path;
+        return this.path;
     }
 
     /**
@@ -358,11 +358,11 @@ public inherited sharing class CallwiseRequest {
      * @return `String` Full endpoint, e.g. 'callout:Stripe_API/v1/customers?limit=10'
      */
     public String getEndpoint() {
-        String endpoint = CALLOUT_PREFIX + namedCredential + path;
-        if (queryParameters.isEmpty()) {
+        String endpoint = CALLOUT_PREFIX + this.namedCredential + this.path;
+        if (this.queryParameters.isEmpty()) {
             return endpoint;
         }
-        return endpoint + (path.contains('?') ? '&' : '?') + String.join(queryParameters, '&');
+        return endpoint + (this.path.contains('?') ? '&' : '?') + String.join(this.queryParameters, '&');
     }
 
     /**
@@ -371,7 +371,7 @@ public inherited sharing class CallwiseRequest {
      * @return `Map<String, String>` Copy of the headers, with names as provided
      */
     public Map<String, String> getHeaders() {
-        return headers.clone();
+        return this.headers.clone();
     }
 
     /**
@@ -380,7 +380,7 @@ public inherited sharing class CallwiseRequest {
      * @return `String` Request body, or null
      */
     public String getBody() {
-        return requestBody;
+        return this.requestBody;
     }
 
     /**
@@ -389,7 +389,7 @@ public inherited sharing class CallwiseRequest {
      * @return `Integer` Per-attempt timeout, in milliseconds
      */
     public Integer getTimeoutMs() {
-        return timeoutMs;
+        return this.timeoutMs;
     }
 
     /**
@@ -398,7 +398,7 @@ public inherited sharing class CallwiseRequest {
      * @return `CallwiseRetryPolicy` Retry policy in effect
      */
     public CallwiseRetryPolicy getRetryPolicy() {
-        return retryPolicy;
+        return this.retryPolicy;
     }
 
     /**
@@ -407,7 +407,7 @@ public inherited sharing class CallwiseRequest {
      * @return `Boolean` False when withoutCircuitBreaker() was called
      */
     public Boolean isCircuitBreakerEnabled() {
-        return circuitBreakerEnabled;
+        return this.circuitBreakerEnabled;
     }
 
     /**
@@ -416,7 +416,7 @@ public inherited sharing class CallwiseRequest {
      * @return `Boolean` True when throwOnError() was called
      */
     public Boolean isThrowOnError() {
-        return throwOnErrorEnabled;
+        return this.throwOnErrorEnabled;
     }
 
     /**
@@ -425,7 +425,7 @@ public inherited sharing class CallwiseRequest {
      * @return `Boolean` True for GET, HEAD, PUT and DELETE, or when a non-blank Idempotency-Key header is set
      */
     public Boolean isIdempotent() {
-        return IDEMPOTENT_METHODS.contains(method) || getIdempotencyKey() != null;
+        return IDEMPOTENT_METHODS.contains(this.method) || this.getIdempotencyKey() != null;
     }
 
     /**
@@ -434,7 +434,7 @@ public inherited sharing class CallwiseRequest {
      * @return `String` Value of the Idempotency-Key header, or null when it is absent or blank
      */
     public String getIdempotencyKey() {
-        String value = headers.get(findHeaderName(IDEMPOTENCY_KEY_HEADER));
+        String value = this.headers.get(this.findHeaderName(IDEMPOTENCY_KEY_HEADER));
         return String.isBlank(value) ? null : value;
     }
 
@@ -445,16 +445,16 @@ public inherited sharing class CallwiseRequest {
      * @throws `CallwiseException` INVALID_REQUEST when no HTTP method was set
      */
     public HttpRequest toHttpRequest() {
-        requireMethod();
+        this.requireMethod();
         HttpRequest request = new HttpRequest();
-        request.setMethod(method);
-        request.setEndpoint(getEndpoint());
-        request.setTimeout(timeoutMs);
-        for (String name : headers.keySet()) {
-            request.setHeader(name, headers.get(name));
+        request.setMethod(this.method);
+        request.setEndpoint(this.getEndpoint());
+        request.setTimeout(this.timeoutMs);
+        for (String name : this.headers.keySet()) {
+            request.setHeader(name, this.headers.get(name));
         }
-        if (requestBody != null) {
-            request.setBody(requestBody);
+        if (this.requestBody != null) {
+            request.setBody(this.requestBody);
         }
         return request;
     }
@@ -482,8 +482,8 @@ public inherited sharing class CallwiseRequest {
         if (normalizedPath.length() > 0 && !normalizedPath.startsWith('/') && !normalizedPath.startsWith('?')) {
             normalizedPath = '/' + normalizedPath;
         }
-        method = httpMethod;
-        path = normalizedPath;
+        this.method = httpMethod;
+        this.path = normalizedPath;
         return this;
     }
 
@@ -494,7 +494,7 @@ public inherited sharing class CallwiseRequest {
      * @return `String` Header name as stored, or null when the header is not set
      */
     private String findHeaderName(String name) {
-        for (String existingName : headers.keySet()) {
+        for (String existingName : this.headers.keySet()) {
             if (existingName.equalsIgnoreCase(name)) {
                 return existingName;
             }
@@ -508,7 +508,7 @@ public inherited sharing class CallwiseRequest {
      * @throws `CallwiseException` INVALID_REQUEST when no method was set
      */
     private void requireMethod() {
-        if (method == null) {
+        if (this.method == null) {
             throw CallwiseException.invalidRequest(
                 'No HTTP method set. Call get(), head(), post(), put(), patch() or del() first.'
             );
@@ -522,7 +522,7 @@ public inherited sharing class CallwiseRequest {
      * @param callbackType `Type` Callback class
      * @throws `CallwiseException` INVALID_REQUEST when the type is null, cannot be instantiated or is not a callback
      */
-    private static void validateCallbackType(Type callbackType) {
+    private void validateCallbackType(Type callbackType) {
         if (callbackType == null) {
             throw CallwiseException.invalidRequest(
                 'sendAsync() requires a callback type. Use sendAsync() without arguments for no callback.'

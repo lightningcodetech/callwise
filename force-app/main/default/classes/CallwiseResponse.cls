@@ -78,7 +78,7 @@ public inherited sharing class CallwiseResponse {
      * @return `Integer` HTTP status code, e.g. 200
      */
     public Integer getStatusCode() {
-        return statusCode;
+        return this.statusCode;
     }
 
     /**
@@ -87,7 +87,7 @@ public inherited sharing class CallwiseResponse {
      * @return `String` HTTP reason phrase, e.g. 'OK'. May be blank.
      */
     public String getStatus() {
-        return status;
+        return this.status;
     }
 
     /**
@@ -96,7 +96,7 @@ public inherited sharing class CallwiseResponse {
      * @return `String` Raw response body. May be null or empty.
      */
     public String getBody() {
-        return body;
+        return this.body;
     }
 
     /**
@@ -106,7 +106,7 @@ public inherited sharing class CallwiseResponse {
      * @return `String` Header value, or null when absent
      */
     public String getHeader(String name) {
-        return String.isBlank(name) ? null : headersByLowerName.get(name.toLowerCase());
+        return String.isBlank(name) ? null : this.headersByLowerName.get(name.toLowerCase());
     }
 
     /**
@@ -115,7 +115,7 @@ public inherited sharing class CallwiseResponse {
      * @return `Map<String, String>` Copy of all headers, keyed by lower-case name
      */
     public Map<String, String> getHeaders() {
-        return headersByLowerName.clone();
+        return this.headersByLowerName.clone();
     }
 
     /**
@@ -124,7 +124,7 @@ public inherited sharing class CallwiseResponse {
      * @return `Integer` Number of attempts made to obtain this response (1 = no retries)
      */
     public Integer getAttempts() {
-        return attempts;
+        return this.attempts;
     }
 
     /**
@@ -133,7 +133,7 @@ public inherited sharing class CallwiseResponse {
      * @return `Long` Wall-clock time across all attempts, in milliseconds
      */
     public Long getElapsedMs() {
-        return elapsedMs;
+        return this.elapsedMs;
     }
 
     /**
@@ -143,7 +143,7 @@ public inherited sharing class CallwiseResponse {
      * @return `Long` Seconds to wait (0 for a date in the past), or null when the header is absent or cannot be parsed
      */
     public Long getRetryAfterSeconds() {
-        String value = getHeader('Retry-After')?.trim();
+        String value = this.getHeader('Retry-After')?.trim();
         if (String.isBlank(value)) {
             return null;
         }
@@ -151,7 +151,59 @@ public inherited sharing class CallwiseResponse {
             // 18 digits always fits in a Long.
             return value.length() > 18 ? null : Long.valueOf(value);
         }
-        return secondsUntil(value);
+        return this.secondsUntil(value);
+    }
+
+    /**
+     * @description Tells whether the status is 2xx.
+     *
+     * @return `Boolean` True for 2xx statuses
+     */
+    public Boolean isSuccess() {
+        return this.statusCode >= 200 && this.statusCode < 300;
+    }
+
+    /**
+     * @description Tells whether the status is 4xx.
+     *
+     * @return `Boolean` True for 4xx statuses
+     */
+    public Boolean isClientError() {
+        return this.statusCode >= 400 && this.statusCode < 500;
+    }
+
+    /**
+     * @description Tells whether the status is 5xx.
+     *
+     * @return `Boolean` True for 5xx statuses
+     */
+    public Boolean isServerError() {
+        return this.statusCode >= 500 && this.statusCode < 600;
+    }
+
+    /**
+     * @description Deserializes the JSON body into the given type. Unknown properties are ignored.
+     *
+     * @param targetType `Type` Apex type to deserialize into, e.g. Customer.class
+     * @return `Object` Deserialized instance, or null when the body is blank
+     * @throws `CallwiseException` INVALID_REQUEST when targetType is null
+     * @throws `JSONException` when the body is not valid JSON for targetType
+     */
+    public Object deserialize(Type targetType) {
+        if (targetType == null) {
+            throw CallwiseException.invalidRequest('deserialize() requires a target type.');
+        }
+        return String.isBlank(this.body) ? null : JSON.deserialize(this.body, targetType);
+    }
+
+    /**
+     * @description Deserializes the JSON body into maps, lists and primitives.
+     *
+     * @return `Object` Deserialized value, or null when the body is blank
+     * @throws `JSONException` when the body is not valid JSON
+     */
+    public Object deserializeUntyped() {
+        return String.isBlank(this.body) ? null : JSON.deserializeUntyped(this.body);
     }
 
     /**
@@ -161,7 +213,7 @@ public inherited sharing class CallwiseResponse {
      * @param httpDate `String` Date such as 'Wed, 21 Oct 2026 07:28:00 GMT'
      * @return `Long` Seconds until the date, rounded up; 0 when it has passed; null when it cannot be parsed
      */
-    private static Long secondsUntil(String httpDate) {
+    private Long secondsUntil(String httpDate) {
         Matcher parts = IMF_FIXDATE.matcher(httpDate);
         if (!parts.matches()) {
             return null;
@@ -186,57 +238,5 @@ public inherited sharing class CallwiseResponse {
         }
         Long remainingMs = instant.getTime() - (nowOverride ?? System.currentTimeMillis());
         return remainingMs <= 0 ? 0 : Math.ceil((Double) remainingMs / 1000).longValue();
-    }
-
-    /**
-     * @description Tells whether the status is 2xx.
-     *
-     * @return `Boolean` True for 2xx statuses
-     */
-    public Boolean isSuccess() {
-        return statusCode >= 200 && statusCode < 300;
-    }
-
-    /**
-     * @description Tells whether the status is 4xx.
-     *
-     * @return `Boolean` True for 4xx statuses
-     */
-    public Boolean isClientError() {
-        return statusCode >= 400 && statusCode < 500;
-    }
-
-    /**
-     * @description Tells whether the status is 5xx.
-     *
-     * @return `Boolean` True for 5xx statuses
-     */
-    public Boolean isServerError() {
-        return statusCode >= 500 && statusCode < 600;
-    }
-
-    /**
-     * @description Deserializes the JSON body into the given type. Unknown properties are ignored.
-     *
-     * @param targetType `Type` Apex type to deserialize into, e.g. Customer.class
-     * @return `Object` Deserialized instance, or null when the body is blank
-     * @throws `CallwiseException` INVALID_REQUEST when targetType is null
-     * @throws `JSONException` when the body is not valid JSON for targetType
-     */
-    public Object deserialize(Type targetType) {
-        if (targetType == null) {
-            throw CallwiseException.invalidRequest('deserialize() requires a target type.');
-        }
-        return String.isBlank(body) ? null : JSON.deserialize(body, targetType);
-    }
-
-    /**
-     * @description Deserializes the JSON body into maps, lists and primitives.
-     *
-     * @return `Object` Deserialized value, or null when the body is blank
-     * @throws `JSONException` when the body is not valid JSON
-     */
-    public Object deserializeUntyped() {
-        return String.isBlank(body) ? null : JSON.deserializeUntyped(body);
     }
 }

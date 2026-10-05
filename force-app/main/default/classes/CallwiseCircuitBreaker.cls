@@ -30,28 +30,24 @@ public inherited sharing class CallwiseCircuitBreaker {
     private static final String KEY_PREFIX = 'cwcb';
     /** @description Statuses below 500 that also mean the endpoint is struggling: 408 and 429. */
     private static final Set<Integer> FAILURE_STATUS_CODES = new Set<Integer>{ 408, 429 };
+    /** @description Store shared by every breaker of the transaction; also the fallback when the cache is unusable. */
+    private static final TransactionStore TRANSACTION_STORE = new TransactionStore();
 
     /** @description Replaces the clock in tests. */
     @TestVisible
     private static Long nowOverride;
-
     /** @description Replaces the store in tests. */
     @TestVisible
     private static Store storeOverride;
-
     /** @description Replaces CallwiseBreaker__mdt records in tests, keyed by Named Credential. */
     @TestVisible
     private static Map<String, CallwiseBreaker__mdt> settingsOverride;
-
     /**
      * @description Lets tests exercise the Platform Cache path; by default tests use the transaction store for
      * isolation.
      */
     @TestVisible
     private static Boolean usePlatformCacheInTests = false;
-
-    /** @description Store shared by every breaker of the transaction; also the fallback when the cache is unusable. */
-    private static final TransactionStore TRANSACTION_STORE = new TransactionStore();
     /** @description Platform Cache store resolved for resolvedPartition, reused for the rest of the transaction. */
     private static Store resolvedStore;
     /** @description Partition name resolvedStore was created for. */
@@ -80,41 +76,6 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * @description Serializable breaker state, as stored in the cache.
-     */
-    public class State {
-        /** @description Current status. */
-        public CircuitStatus status = CircuitStatus.CLOSED;
-        /** @description Failures recorded since the last success. */
-        public Integer consecutiveFailures = 0;
-        /** @description When the circuit opened, in epoch milliseconds; null unless OPEN. */
-        public Long openedAt;
-        /** @description When the current trial started, in epoch milliseconds; null unless HALF_OPEN. */
-        public Long trialStartedAt;
-    }
-
-    /**
-     * @description Where breaker state is kept.
-     */
-    public interface Store {
-        /**
-         * @description Reads the state of a breaker.
-         *
-         * @param key `String` Alphanumeric key
-         * @return `State` Stored state, or null when absent or expired
-         */
-        State get(String key);
-
-        /**
-         * @description Writes the state of a breaker.
-         *
-         * @param key `String` Alphanumeric key
-         * @param state `State` State to store
-         */
-        void put(String key, State state);
-    }
-
-    /**
      * @description Creates the breaker of a Named Credential and reads its CallwiseBreaker__mdt settings.
      *
      * @param namedCredential `String` API name of the Named Credential the breaker protects
@@ -123,9 +84,9 @@ public inherited sharing class CallwiseCircuitBreaker {
         this.namedCredential = namedCredential;
         // Cache keys must be alphanumeric; Named Credential names may contain underscores.
         this.key = KEY_PREFIX + EncodingUtil.convertToHex(Crypto.generateDigest('MD5', Blob.valueOf(namedCredential)));
-        CallwiseBreaker__mdt settings = settingsFor(namedCredential);
-        this.failureThreshold = inRange(settings?.FailureThreshold__c, MAX_FAILURE_THRESHOLD) ?? FAILURE_THRESHOLD;
-        Integer openSeconds = inRange(settings?.OpenSeconds__c, MAX_OPEN_SECONDS);
+        CallwiseBreaker__mdt settings = this.settingsFor(namedCredential);
+        this.failureThreshold = this.inRange(settings?.FailureThreshold__c, MAX_FAILURE_THRESHOLD) ?? FAILURE_THRESHOLD;
+        Integer openSeconds = this.inRange(settings?.OpenSeconds__c, MAX_OPEN_SECONDS);
         this.openDurationMs = openSeconds == null ? OPEN_DURATION_MS : openSeconds * 1000L;
     }
 
@@ -145,7 +106,7 @@ public inherited sharing class CallwiseCircuitBreaker {
      * @return `Integer` FailureThreshold__c of the settings record, or FAILURE_THRESHOLD
      */
     public Integer getFailureThreshold() {
-        return failureThreshold;
+        return this.failureThreshold;
     }
 
     /**
@@ -154,7 +115,7 @@ public inherited sharing class CallwiseCircuitBreaker {
      * @return `Long` OpenSeconds__c of the settings record in milliseconds, or OPEN_DURATION_MS
      */
     public Long getOpenDurationMs() {
-        return openDurationMs;
+        return this.openDurationMs;
     }
 
     /**
@@ -164,20 +125,20 @@ public inherited sharing class CallwiseCircuitBreaker {
      * @return `Boolean` True when the request may be sent
      */
     public Boolean allowRequest() {
-        State state = load();
-        Long now = now();
+        State state = this.load();
+        Long now = this.now();
         if (state.status == CircuitStatus.CLOSED) {
             return true;
         }
         // OPEN waits from the moment it opened; HALF_OPEN waits from the trial, so a trial that never reported back
         // (its transaction failed) is replaced after the same wait.
         Long since = state.status == CircuitStatus.OPEN ? state.openedAt : state.trialStartedAt;
-        if (now - since < openDurationMs) {
+        if (now - since < this.openDurationMs) {
             return false;
         }
         state.status = CircuitStatus.HALF_OPEN;
         state.trialStartedAt = now;
-        save(state);
+        this.save(state);
         return true;
     }
 
@@ -192,7 +153,7 @@ public inherited sharing class CallwiseCircuitBreaker {
     public void record(CallwiseResponse response, CallwiseException failure) {
         if (failure != null) {
             if (failure.isTransportFailure()) {
-                recordFailure();
+                this.recordFailure();
             }
             return;
         }
@@ -201,9 +162,9 @@ public inherited sharing class CallwiseCircuitBreaker {
         }
         Integer statusCode = response.getStatusCode();
         if (statusCode >= 500 || FAILURE_STATUS_CODES.contains(statusCode)) {
-            recordFailure();
+            this.recordFailure();
         } else {
-            recordSuccess();
+            this.recordSuccess();
         }
     }
 
@@ -213,7 +174,7 @@ public inherited sharing class CallwiseCircuitBreaker {
      * @return `CircuitStatus` CLOSED, OPEN or HALF_OPEN
      */
     public CircuitStatus getStatus() {
-        return load().status;
+        return this.load().status;
     }
 
     /**
@@ -222,11 +183,11 @@ public inherited sharing class CallwiseCircuitBreaker {
      * @return `Long` Seconds until a trial request is let through, rounded up; 0 when the circuit is not open
      */
     public Long secondsUntilTrial() {
-        State state = load();
+        State state = this.load();
         if (state.status != CircuitStatus.OPEN) {
             return 0;
         }
-        Long remainingMs = Math.max(0, openDurationMs - (now() - state.openedAt));
+        Long remainingMs = Math.max(0, this.openDurationMs - (this.now() - state.openedAt));
         return Math.ceil((Double) remainingMs / 1000).longValue();
     }
 
@@ -240,88 +201,9 @@ public inherited sharing class CallwiseCircuitBreaker {
             CallwiseException.FailureReason.CIRCUIT_OPEN,
             String.format(
                 'Circuit open for {0} after repeated failures; no callout was made. Next trial in about {1} s.',
-                new List<Object>{ namedCredential, String.valueOf(secondsUntilTrial()) }
+                new List<Object>{ this.namedCredential, String.valueOf(this.secondsUntilTrial()) }
             )
         );
-    }
-
-    /**
-     * @description Closes the circuit and resets the failure count. Skips the write when nothing changes.
-     */
-    private void recordSuccess() {
-        State state = load();
-        if (state.status == CircuitStatus.CLOSED && state.consecutiveFailures == 0) {
-            return;
-        }
-        save(new State());
-    }
-
-    /**
-     * @description Counts a failure and opens the circuit when the threshold is reached or the trial failed.
-     */
-    private void recordFailure() {
-        State state = load();
-        state.consecutiveFailures++;
-        if (state.status == CircuitStatus.HALF_OPEN || state.consecutiveFailures >= failureThreshold) {
-            state.status = CircuitStatus.OPEN;
-            state.openedAt = now();
-            state.trialStartedAt = null;
-        }
-        save(state);
-    }
-
-    /**
-     * @description Reads the state of this breaker.
-     *
-     * @return `State` Stored state, or a new CLOSED state when none is stored
-     */
-    private State load() {
-        return store().get(key) ?? new State();
-    }
-
-    /**
-     * @description Writes the state of this breaker.
-     *
-     * @param state `State` State to store
-     */
-    private void save(State state) {
-        store().put(key, state);
-    }
-
-    /**
-     * @description Reads the settings record of a Named Credential. getInstance() does not count against SOQL limits.
-     *
-     * @param namedCredential `String` API name of the Named Credential
-     * @return `CallwiseBreaker__mdt` Settings record, or null when there is none
-     */
-    private static CallwiseBreaker__mdt settingsFor(String namedCredential) {
-        if (settingsOverride != null) {
-            return settingsOverride.get(namedCredential);
-        }
-        return CallwiseBreaker__mdt.getInstance(namedCredential);
-    }
-
-    /**
-     * @description Validates a numeric setting.
-     *
-     * @param value `Decimal` Field value, possibly null
-     * @param max `Integer` Largest accepted value
-     * @return `Integer` The value when it is a whole number between 1 and max, otherwise null
-     */
-    private static Integer inRange(Decimal value, Integer max) {
-        if (value == null || value < 1 || value > max || value != value.round()) {
-            return null;
-        }
-        return value.intValue();
-    }
-
-    /**
-     * @description Returns the current time, or nowOverride in tests.
-     *
-     * @return `Long` Epoch milliseconds
-     */
-    private static Long now() {
-        return nowOverride ?? System.currentTimeMillis();
     }
 
     /**
@@ -346,25 +228,117 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * @description Writes a WARN debug line, once per transaction, when the cache partition cannot be used.
-     *
-     * @param partitionName `String` Partition that failed
-     * @param cause `Exception` Error raised by Platform Cache
+     * @description Closes the circuit and resets the failure count. Skips the write when nothing changes.
      */
-    @SuppressWarnings('PMD.AvoidDebugStatements')
-    private static void warnCacheUnavailable(String partitionName, Exception cause) {
-        if (warned) {
+    private void recordSuccess() {
+        State state = this.load();
+        if (state.status == CircuitStatus.CLOSED && state.consecutiveFailures == 0) {
             return;
         }
-        warned = true;
-        System.debug(
-            LoggingLevel.WARN,
-            String.format(
-                '[Callwise] Platform Cache partition {0} is not usable ({1}). ' +
-                'Circuit breaker state only lives for this transaction.',
-                new List<Object>{ partitionName, cause.getMessage() }
-            )
-        );
+        this.save(new State());
+    }
+
+    /**
+     * @description Counts a failure and opens the circuit when the threshold is reached or the trial failed.
+     */
+    private void recordFailure() {
+        State state = this.load();
+        state.consecutiveFailures++;
+        if (state.status == CircuitStatus.HALF_OPEN || state.consecutiveFailures >= this.failureThreshold) {
+            state.status = CircuitStatus.OPEN;
+            state.openedAt = this.now();
+            state.trialStartedAt = null;
+        }
+        this.save(state);
+    }
+
+    /**
+     * @description Reads the state of this breaker.
+     *
+     * @return `State` Stored state, or a new CLOSED state when none is stored
+     */
+    private State load() {
+        return store().get(this.key) ?? new State();
+    }
+
+    /**
+     * @description Writes the state of this breaker.
+     *
+     * @param state `State` State to store
+     */
+    private void save(State state) {
+        store().put(this.key, state);
+    }
+
+    /**
+     * @description Reads the settings record of a Named Credential. getInstance() does not count against SOQL limits.
+     *
+     * @param namedCredential `String` API name of the Named Credential
+     * @return `CallwiseBreaker__mdt` Settings record, or null when there is none
+     */
+    private CallwiseBreaker__mdt settingsFor(String namedCredential) {
+        if (settingsOverride != null) {
+            return settingsOverride.get(namedCredential);
+        }
+        return CallwiseBreaker__mdt.getInstance(namedCredential);
+    }
+
+    /**
+     * @description Validates a numeric setting.
+     *
+     * @param value `Decimal` Field value, possibly null
+     * @param max `Integer` Largest accepted value
+     * @return `Integer` The value when it is a whole number between 1 and max, otherwise null
+     */
+    private Integer inRange(Decimal value, Integer max) {
+        if (value == null || value < 1 || value > max || value != value.round()) {
+            return null;
+        }
+        return value.intValue();
+    }
+
+    /**
+     * @description Returns the current time, or nowOverride in tests.
+     *
+     * @return `Long` Epoch milliseconds
+     */
+    private Long now() {
+        return nowOverride ?? System.currentTimeMillis();
+    }
+
+    /**
+     * @description Where breaker state is kept.
+     */
+    public interface Store {
+        /**
+         * @description Reads the state of a breaker.
+         *
+         * @param key `String` Alphanumeric key
+         * @return `State` Stored state, or null when absent or expired
+         */
+        State get(String key);
+
+        /**
+         * @description Writes the state of a breaker.
+         *
+         * @param key `String` Alphanumeric key
+         * @param state `State` State to store
+         */
+        void put(String key, State state);
+    }
+
+    /**
+     * @description Serializable breaker state, as stored in the cache.
+     */
+    public class State {
+        /** @description Current status. */
+        public CircuitStatus status = CircuitStatus.CLOSED;
+        /** @description Failures recorded since the last success. */
+        public Integer consecutiveFailures = 0;
+        /** @description When the circuit opened, in epoch milliseconds; null unless OPEN. */
+        public Long openedAt;
+        /** @description When the current trial started, in epoch milliseconds; null unless HALF_OPEN. */
+        public Long trialStartedAt;
     }
 
     /**
@@ -388,9 +362,9 @@ public inherited sharing class CallwiseCircuitBreaker {
         private PlatformCacheStore(String partitionName) {
             this.partitionName = partitionName;
             try {
-                partition = Cache.Org.getPartition(partitionName);
+                this.partition = Cache.Org.getPartition(partitionName);
             } catch (Exception e) {
-                markUnavailable(e);
+                this.markUnavailable(e);
             }
         }
 
@@ -401,11 +375,11 @@ public inherited sharing class CallwiseCircuitBreaker {
          * @return `State` Stored state, or null when absent or expired
          */
         public State get(String key) {
-            if (!unavailable) {
+            if (!this.unavailable) {
                 try {
-                    return (State) partition.get(key);
+                    return (State) this.partition.get(key);
                 } catch (Exception e) {
-                    markUnavailable(e);
+                    this.markUnavailable(e);
                 }
             }
             return TRANSACTION_STORE.get(key);
@@ -419,25 +393,38 @@ public inherited sharing class CallwiseCircuitBreaker {
          * @param state `State` State to store
          */
         public void put(String key, State state) {
-            if (!unavailable) {
+            if (!this.unavailable) {
                 try {
-                    partition.put(key, state, CACHE_TTL_SECONDS);
+                    this.partition.put(key, state, CACHE_TTL_SECONDS);
                     return;
                 } catch (Exception e) {
-                    markUnavailable(e);
+                    this.markUnavailable(e);
                 }
             }
             TRANSACTION_STORE.put(key, state);
         }
 
         /**
-         * @description Switches to the transaction store for the rest of the transaction and warns once.
+         * @description Switches to the transaction store for the rest of the transaction and writes a WARN debug line,
+         * once per transaction, naming the partition and the error.
          *
          * @param e `Exception` Error raised by Platform Cache
          */
+        @SuppressWarnings('PMD.AvoidDebugStatements')
         private void markUnavailable(Exception e) {
-            unavailable = true;
-            warnCacheUnavailable(partitionName, e);
+            this.unavailable = true;
+            if (warned) {
+                return;
+            }
+            warned = true;
+            System.debug(
+                LoggingLevel.WARN,
+                String.format(
+                    '[Callwise] Platform Cache partition {0} is not usable ({1}). ' +
+                    'Circuit breaker state only lives for this transaction.',
+                    new List<Object>{ this.partitionName, e.getMessage() }
+                )
+            );
         }
     }
 
@@ -456,7 +443,7 @@ public inherited sharing class CallwiseCircuitBreaker {
          * @return `State` Stored state, or null when absent
          */
         public State get(String key) {
-            return states.get(key);
+            return this.states.get(key);
         }
 
         /**
@@ -466,7 +453,7 @@ public inherited sharing class CallwiseCircuitBreaker {
          * @param state `State` State to store
          */
         public void put(String key, State state) {
-            states.put(key, state);
+            this.states.put(key, state);
         }
     }
 }
