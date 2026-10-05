@@ -1,9 +1,13 @@
+/**
+ * @description Tests for CallwiseEngine.send(): transport-error translation, synchronous retries, idempotency,
+ * Retry-After, the limits budget and the circuit breaker.
+ */
 @IsTest
 private class CallwiseEngineTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
 
     @IsTest
-    static void shouldReturnResponse_WhenCalloutSucceeds() {
+    static void shouldReturnResponseWhenCalloutSucceeds() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/orders/1').thenRespond(200, '{"id":1}').install();
         RecordingLogger logger = installLogger();
 
@@ -18,7 +22,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldReturnErrorResponse_WhenThrowOnErrorIsOff() {
+    static void shouldReturnErrorResponseWhenThrowOnErrorIsOff() {
         new CallwiseMock().whenRequest('GET', '/orders/1').thenRespond(404, '').install();
 
         Test.startTest();
@@ -29,7 +33,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldThrowHttpError_WhenThrowOnErrorIsOn() {
+    static void shouldThrowHttpErrorWhenThrowOnErrorIsOn() {
         new CallwiseMock().whenRequest('GET', '/orders/1').thenRespond(500, 'oops').install();
 
         Test.startTest();
@@ -64,7 +68,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldLogFailure_WhenCalloutThrows() {
+    static void shouldLogFailureWhenCalloutThrows() {
         new CallwiseMock().whenRequest('GET', '/a').thenThrow('Connection reset').install();
         RecordingLogger logger = installLogger();
 
@@ -83,7 +87,7 @@ private class CallwiseEngineTest {
     // ---------------------------------------------------------------------------------------------------------
 
     @IsTest
-    static void shouldRetryTransientStatus_UntilSuccess() {
+    static void shouldRetryTransientStatusUntilSuccess() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenRespond(503, '')
@@ -106,7 +110,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldRetryTransportFailure_UntilSuccess() {
+    static void shouldRetryTransportFailureUntilSuccess() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenThrow('Read timed out')
@@ -122,7 +126,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldReturnLastResponse_WhenAttemptsAreExhausted() {
+    static void shouldReturnLastResponseWhenAttemptsAreExhausted() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -138,7 +142,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldThrowHttpError_WhenAttemptsAreExhaustedWithThrowOnError() {
+    static void shouldThrowHttpErrorWhenAttemptsAreExhaustedWithThrowOnError() {
         new CallwiseMock().whenRequest('GET', '/a').thenRespond(502, '').install();
 
         Test.startTest();
@@ -153,7 +157,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldThrowLastFailure_WhenAttemptsAreExhausted() {
+    static void shouldThrowLastFailureWhenAttemptsAreExhausted() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenThrow('Connection reset')
@@ -173,7 +177,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldNotRetry_WhenStatusIsNotRetryable() {
+    static void shouldNotRetryWhenStatusIsNotRetryable() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(404, '').install();
 
         Test.startTest();
@@ -184,7 +188,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldNotRetry_WhenPolicyIsNone() {
+    static void shouldNotRetryWhenPolicyIsNone() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -195,7 +199,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldNotRetryPost_WithoutIdempotencyKey() {
+    static void shouldNotRetryPostWithoutIdempotencyKey() {
         CallwiseMock mock = new CallwiseMock().whenRequest('POST', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -206,7 +210,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldRetryPost_WithIdempotencyKey() {
+    static void shouldRetryPostWithIdempotencyKey() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('POST', '/a')
             .thenRespond(503, '')
@@ -222,7 +226,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldSendSameGeneratedKey_OnEveryAttempt() {
+    static void shouldSendSameGeneratedKeyOnEveryAttempt() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('POST', '/a')
             .thenRespond(503, '')
@@ -248,7 +252,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldNotRetry_WhenServerAsksToWait() {
+    static void shouldNotRetryWhenServerAsksToWait() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenRespond(429, '', new Map<String, String>{ 'Retry-After' => '30' })
@@ -263,7 +267,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldRetry_WhenRetryAfterIsZero() {
+    static void shouldRetryWhenRetryAfterIsZero() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenRespond(429, '', new Map<String, String>{ 'Retry-After' => '0' })
@@ -282,7 +286,7 @@ private class CallwiseEngineTest {
     // ---------------------------------------------------------------------------------------------------------
 
     @IsTest
-    static void shouldStopRetrying_WhenTimeoutDoesNotFitRemainingCalloutTime() {
+    static void shouldStopRetryingWhenTimeoutDoesNotFitRemainingCalloutTime() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
         CallwiseEngine.calloutMsUsed = CallwiseEngine.MAX_CALLOUT_TIME_MS - 5000;
 
@@ -295,7 +299,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldStopRetrying_WhenNoCalloutIsLeft() {
+    static void shouldStopRetryingWhenNoCalloutIsLeft() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -308,7 +312,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldThrowLimitBudget_WhenNoCalloutIsLeftForTheFirstAttempt() {
+    static void shouldThrowLimitBudgetWhenNoCalloutIsLeftForTheFirstAttempt() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '').install();
         RecordingLogger logger = installLogger();
 
@@ -348,7 +352,7 @@ private class CallwiseEngineTest {
     // ---------------------------------------------------------------------------------------------------------
 
     @IsTest
-    static void shouldThrowCircuitOpen_WithoutCallout_WhenBreakerIsOpen() {
+    static void shouldThrowCircuitOpenWithoutCalloutWhenBreakerIsOpen() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -371,7 +375,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldStopRetrying_WhenCircuitOpens() {
+    static void shouldStopRetryingWhenCircuitOpens() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -390,7 +394,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldBypassBreaker_WhenDisabled() {
+    static void shouldBypassBreakerWhenDisabled() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenRespond(503, '')
@@ -421,7 +425,7 @@ private class CallwiseEngineTest {
     }
 
     @IsTest
-    static void shouldCloseBreaker_WhenTrialRequestSucceeds() {
+    static void shouldCloseBreakerWhenTrialRequestSucceeds() {
         new CallwiseMock()
             .whenRequest('GET', '/a')
             .thenRespond(503, '')
@@ -473,6 +477,9 @@ private class CallwiseEngineTest {
         return logger;
     }
 
+    /**
+     * @description Logger that records each attempt as "attempt=n status=x" or "attempt=n failure=reason".
+     */
     private class RecordingLogger implements Callwise.Logger {
         private final List<String> entries = new List<String>();
 

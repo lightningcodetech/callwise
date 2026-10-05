@@ -1,9 +1,12 @@
+/**
+ * @description Tests for CallwiseRetryPolicy: factories, validation, retry decisions and async backoff delays.
+ */
 @IsTest
 private class CallwiseRetryPolicyTest {
     private static final Set<Integer> TRANSIENT_CODES = new Set<Integer>{ 408, 429, 500, 502, 503, 504 };
 
     @IsTest
-    static void shouldMakeSingleAttempt_WhenNone() {
+    static void shouldMakeSingleAttemptWhenNone() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.none();
 
         Assert.areEqual(1, policy.getMaxAttempts(), 'none() makes one attempt');
@@ -14,7 +17,7 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldUseTransientDefaults_WhenTransientErrors() {
+    static void shouldUseTransientDefaultsWhenTransientErrors() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors();
 
         Assert.areEqual(3, policy.getMaxAttempts(), 'transientErrors() makes 3 attempts');
@@ -23,29 +26,29 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldSetMaxAttempts_WhenInRange() {
+    static void shouldSetMaxAttemptsWhenInRange() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.none().maxAttempts(CallwiseRetryPolicy.MAX_ATTEMPTS_LIMIT);
 
         Assert.areEqual(CallwiseRetryPolicy.MAX_ATTEMPTS_LIMIT, policy.getMaxAttempts(), 'Upper bound is allowed');
     }
 
     @IsTest
-    static void shouldRejectMaxAttempts_WhenZero() {
+    static void shouldRejectMaxAttemptsWhenZero() {
         assertInvalid(CallwiseRetryPolicy.none(), 'maxAttempts', 0);
     }
 
     @IsTest
-    static void shouldRejectMaxAttempts_WhenAboveLimit() {
+    static void shouldRejectMaxAttemptsWhenAboveLimit() {
         assertInvalid(CallwiseRetryPolicy.none(), 'maxAttempts', CallwiseRetryPolicy.MAX_ATTEMPTS_LIMIT + 1);
     }
 
     @IsTest
-    static void shouldRejectMaxAttempts_WhenNull() {
+    static void shouldRejectMaxAttemptsWhenNull() {
         assertInvalid(CallwiseRetryPolicy.none(), 'maxAttempts', null);
     }
 
     @IsTest
-    static void shouldReplaceStatusCodes_WhenRetryOn() {
+    static void shouldReplaceStatusCodesWhenRetryOn() {
         Set<Integer> codes = new Set<Integer>{ 503 };
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors().retryOn(codes);
         codes.add(500);
@@ -54,7 +57,7 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldRejectRetryOn_WhenNull() {
+    static void shouldRejectRetryOnWhenNull() {
         try {
             CallwiseRetryPolicy.none().retryOn(null);
             Assert.fail('Expected CallwiseException');
@@ -64,38 +67,38 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldRejectAsyncBaseDelay_WhenNegative() {
+    static void shouldRejectAsyncBaseDelayWhenNegative() {
         assertInvalid(CallwiseRetryPolicy.none(), 'asyncBaseDelay', -1);
     }
 
     @IsTest
-    static void shouldRejectAsyncBaseDelay_WhenAboveLimit() {
+    static void shouldRejectAsyncBaseDelayWhenAboveLimit() {
         assertInvalid(CallwiseRetryPolicy.none(), 'asyncBaseDelay', CallwiseRetryPolicy.MAX_ASYNC_DELAY_MINUTES + 1);
     }
 
     @IsTest
-    static void shouldRetryIdempotentRequest_WhenStatusIsRetryable() {
+    static void shouldRetryIdempotentRequestWhenStatusIsRetryable() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors();
 
         Assert.isTrue(policy.isRetryable(Callwise.to('API').get('/a'), response(503, null), null), '503 GET');
     }
 
     @IsTest
-    static void shouldNotRetry_WhenStatusIsNotRetryable() {
+    static void shouldNotRetryWhenStatusIsNotRetryable() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors();
 
         Assert.isFalse(policy.isRetryable(Callwise.to('API').get('/a'), response(404, null), null), '404 GET');
     }
 
     @IsTest
-    static void shouldNotRetryPost_WhenNoIdempotencyKey() {
+    static void shouldNotRetryPostWhenNoIdempotencyKey() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors();
 
         Assert.isFalse(policy.isRetryable(Callwise.to('API').post('/a'), response(503, null), null), 'Plain POST');
     }
 
     @IsTest
-    static void shouldRetryPost_WhenIdempotencyKeyPresent() {
+    static void shouldRetryPostWhenIdempotencyKeyPresent() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors();
         CallwiseRequest request = Callwise.to('API').post('/a').header('Idempotency-Key', 'k1');
 
@@ -103,14 +106,14 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldRetryPost_WhenNonIdempotentAllowed() {
+    static void shouldRetryPostWhenNonIdempotentAllowed() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors().allowNonIdempotent();
 
         Assert.isTrue(policy.isRetryable(Callwise.to('API').patch('/a'), response(503, null), null), 'PATCH allowed');
     }
 
     @IsTest
-    static void shouldRetryTransportAndTimeout_WhenTransientErrors() {
+    static void shouldRetryTransportAndTimeoutWhenTransientErrors() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors();
         CallwiseRequest request = Callwise.to('API').get('/a');
 
@@ -133,7 +136,7 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldNotRetryTransport_WhenPolicyIsNone() {
+    static void shouldNotRetryTransportWhenPolicyIsNone() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.none();
 
         Assert.isFalse(
@@ -143,12 +146,12 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldNotRetry_WhenRequestIsNull() {
+    static void shouldNotRetryWhenRequestIsNull() {
         Assert.isFalse(CallwiseRetryPolicy.transientErrors().isRetryable(null, response(503, null), null), 'Null');
     }
 
     @IsTest
-    static void shouldNotRetry_WhenNeitherResponseNorFailure() {
+    static void shouldNotRetryWhenNeitherResponseNorFailure() {
         Assert.isFalse(
             CallwiseRetryPolicy.transientErrors().isRetryable(Callwise.to('API').get('/a'), null, null),
             'Nothing to evaluate'
@@ -165,21 +168,21 @@ private class CallwiseRetryPolicyTest {
     }
 
     @IsTest
-    static void shouldCapBackoff_WhenAttemptIsLarge() {
+    static void shouldCapBackoffWhenAttemptIsLarge() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors().asyncBaseDelay(3);
 
         Assert.areEqual(10, policy.asyncDelayMinutes(50, null), 'Delay is capped at 10 minutes');
     }
 
     @IsTest
-    static void shouldNotDelay_WhenBaseIsZero() {
+    static void shouldNotDelayWhenBaseIsZero() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors().asyncBaseDelay(0);
 
         Assert.areEqual(0, policy.asyncDelayMinutes(5, null), 'Zero base never waits');
     }
 
     @IsTest
-    static void shouldUseBase_WhenAttemptIsNull() {
+    static void shouldUseBaseWhenAttemptIsNull() {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors().asyncBaseDelay(2);
 
         Assert.areEqual(2, policy.asyncDelayMinutes(null, null), 'Null attempt is treated as the first');

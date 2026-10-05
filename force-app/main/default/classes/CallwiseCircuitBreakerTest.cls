@@ -1,10 +1,14 @@
+/**
+ * @description Tests for CallwiseCircuitBreaker: state transitions, failure classification, per-credential state,
+ * CallwiseBreaker__mdt settings and the Platform Cache fallback.
+ */
 @IsTest
 private class CallwiseCircuitBreakerTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
     private static final Long T0 = 1700000000000L;
 
     @IsTest
-    static void shouldStayClosed_BelowThreshold() {
+    static void shouldStayClosedBelowThreshold() {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
@@ -19,7 +23,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldOpen_AtThreshold() {
+    static void shouldOpenAtThreshold() {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD);
@@ -30,7 +34,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldResetFailureCount_OnSuccess() {
+    static void shouldResetFailureCountOnSuccess() {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
@@ -45,7 +49,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldRejectRequests_UntilOpenPeriodEnds() {
+    static void shouldRejectRequestsUntilOpenPeriodEnds() {
         CallwiseCircuitBreaker breaker = openBreaker();
 
         CallwiseCircuitBreaker.nowOverride = T0 + CallwiseCircuitBreaker.OPEN_DURATION_MS - 500;
@@ -55,7 +59,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldAllowOneTrial_AfterOpenPeriod() {
+    static void shouldAllowOneTrialAfterOpenPeriod() {
         CallwiseCircuitBreaker breaker = openBreaker();
 
         CallwiseCircuitBreaker.nowOverride = T0 + CallwiseCircuitBreaker.OPEN_DURATION_MS;
@@ -67,7 +71,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldClose_WhenTrialSucceeds() {
+    static void shouldCloseWhenTrialSucceeds() {
         CallwiseCircuitBreaker breaker = openBreaker();
         CallwiseCircuitBreaker.nowOverride = T0 + CallwiseCircuitBreaker.OPEN_DURATION_MS;
         breaker.allowRequest();
@@ -79,7 +83,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldReopen_WhenTrialFails() {
+    static void shouldReopenWhenTrialFails() {
         CallwiseCircuitBreaker breaker = openBreaker();
         Long trialAt = T0 + CallwiseCircuitBreaker.OPEN_DURATION_MS;
         CallwiseCircuitBreaker.nowOverride = trialAt;
@@ -93,7 +97,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldAllowNewTrial_WhenPreviousTrialNeverReported() {
+    static void shouldAllowNewTrialWhenPreviousTrialNeverReported() {
         CallwiseCircuitBreaker breaker = openBreaker();
         Long trialAt = T0 + CallwiseCircuitBreaker.OPEN_DURATION_MS;
         CallwiseCircuitBreaker.nowOverride = trialAt;
@@ -105,7 +109,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldCountServerErrors_AsFailures() {
+    static void shouldCountServerErrorsAsFailures() {
         for (Integer statusCode : new List<Integer>{ 500, 502, 503, 504, 408, 429 }) {
             CallwiseCircuitBreaker breaker = new CallwiseCircuitBreaker('Status_' + statusCode);
             for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
@@ -120,7 +124,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldCountClientErrors_AsSuccess() {
+    static void shouldCountClientErrorsAsSuccess() {
         CallwiseCircuitBreaker breaker = newBreaker();
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
 
@@ -135,7 +139,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldCountTimeouts_AsFailures() {
+    static void shouldCountTimeoutsAsFailures() {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
@@ -146,7 +150,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldIgnoreFailures_UnrelatedToEndpointHealth() {
+    static void shouldIgnoreFailuresUnrelatedToEndpointHealth() {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
@@ -159,7 +163,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldKeepSeparateState_PerNamedCredential() {
+    static void shouldKeepSeparateStatePerNamedCredential() {
         CallwiseCircuitBreaker failing = openBreaker();
         CallwiseCircuitBreaker healthy = new CallwiseCircuitBreaker('Other_API');
 
@@ -168,7 +172,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldShareState_BetweenInstancesOfSameCredential() {
+    static void shouldShareStateBetweenInstancesOfSameCredential() {
         openBreaker();
 
         Assert.isFalse(newBreaker().allowRequest(), 'State is per credential, not per instance');
@@ -184,7 +188,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldNeverOpen_WhenStoreLosesState() {
+    static void shouldNeverOpenWhenStoreLosesState() {
         CallwiseCircuitBreaker.storeOverride = new EvictingStore();
         CallwiseCircuitBreaker breaker = newBreaker();
 
@@ -194,7 +198,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldFallBackToTransactionStore_WhenPartitionIsMissing() {
+    static void shouldFallBackToTransactionStoreWhenPartitionIsMissing() {
         CallwiseCircuitBreaker.usePlatformCacheInTests = true;
         Callwise.setCachePartition('local.CallwiseMissingPartition');
         CallwiseCircuitBreaker breaker = newBreaker();
@@ -211,7 +215,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldKeepWorking_WhenSwitchingToAnotherMissingPartition() {
+    static void shouldKeepWorkingWhenSwitchingToAnotherMissingPartition() {
         CallwiseCircuitBreaker.usePlatformCacheInTests = true;
         Callwise.setCachePartition('local.CallwiseMissingPartition');
         fail(newBreaker(), CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
@@ -228,11 +232,11 @@ private class CallwiseCircuitBreakerTest {
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // Settings (Callwise_Breaker__mdt)
+    // Settings (CallwiseBreaker__mdt)
     // ---------------------------------------------------------------------------------------------------------
 
     @IsTest
-    static void shouldUseDefaults_WhenNoSettingsRecordExists() {
+    static void shouldUseDefaultsWhenNoSettingsRecordExists() {
         CallwiseCircuitBreaker breaker = new CallwiseCircuitBreaker('No_Record_For_This_Credential');
 
         Assert.areEqual(CallwiseCircuitBreaker.FAILURE_THRESHOLD, breaker.getFailureThreshold(), 'Default threshold');
@@ -244,7 +248,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldOpen_AtConfiguredThreshold() {
+    static void shouldOpenAtConfiguredThreshold() {
         configure(NAMED_CREDENTIAL, 2, null);
         CallwiseCircuitBreaker breaker = newBreaker();
 
@@ -258,7 +262,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldStayOpen_ForConfiguredSeconds() {
+    static void shouldStayOpenForConfiguredSeconds() {
         configure(NAMED_CREDENTIAL, null, 120);
         CallwiseCircuitBreaker breaker = openBreaker();
 
@@ -315,7 +319,7 @@ private class CallwiseCircuitBreakerTest {
     }
 
     @IsTest
-    static void shouldApplySettings_OnlyToTheirNamedCredential() {
+    static void shouldApplySettingsOnlyToTheirNamedCredential() {
         configure('Payments_API', 1, 300);
 
         Assert.areEqual(1, new CallwiseCircuitBreaker('Payments_API').getFailureThreshold(), 'Configured credential');
@@ -329,13 +333,13 @@ private class CallwiseCircuitBreakerTest {
     private static void configure(String namedCredential, Decimal threshold, Decimal openSeconds) {
         Map<String, Object> fields = new Map<String, Object>{
             'DeveloperName' => namedCredential,
-            'Failure_Threshold__c' => threshold,
-            'Open_Seconds__c' => openSeconds
+            'FailureThreshold__c' => threshold,
+            'OpenSeconds__c' => openSeconds
         };
-        CallwiseCircuitBreaker.settingsOverride = new Map<String, Callwise_Breaker__mdt>{
-            namedCredential => (Callwise_Breaker__mdt) JSON.deserialize(
+        CallwiseCircuitBreaker.settingsOverride = new Map<String, CallwiseBreaker__mdt>{
+            namedCredential => (CallwiseBreaker__mdt) JSON.deserialize(
                 JSON.serialize(fields),
-                Callwise_Breaker__mdt.class
+                CallwiseBreaker__mdt.class
             )
         };
     }
@@ -367,6 +371,9 @@ private class CallwiseCircuitBreakerTest {
         return new CallwiseResponse(raw, 1, 0L);
     }
 
+    /**
+     * @description Store that loses every entry, like a cache that evicts immediately.
+     */
     private class EvictingStore implements CallwiseCircuitBreaker.Store {
         public CallwiseCircuitBreaker.State get(String key) {
             return null;

@@ -208,8 +208,8 @@ today. A namespace can be introduced later as a major version.
 **Context.** One threshold and one open period do not fit every API: a payments API may deserve a lower threshold, a
 slow batch API a longer open period.
 
-**Decision.** A `Callwise_Breaker__mdt` record named after the Named Credential sets `Failure_Threshold__c` (1–100)
-and `Open_Seconds__c` (1–3600). Without a record, or for a blank or out-of-range field, the defaults apply: 5
+**Decision.** A `CallwiseBreaker__mdt` record named after the Named Credential sets `FailureThreshold__c` (1–100)
+and `OpenSeconds__c` (1–3600). Without a record, or for a blank or out-of-range field, the defaults apply: 5
 failures and 60 s.
 
 **Alternatives.**

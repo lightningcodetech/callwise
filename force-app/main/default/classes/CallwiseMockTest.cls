@@ -1,7 +1,11 @@
+/**
+ * @description Tests for CallwiseMock: route matching with wildcards and query strings, response sequences, failures
+ * and request counting.
+ */
 @IsTest
 private class CallwiseMockTest {
     @IsTest
-    static void shouldRespond_WhenRouteMatches() {
+    static void shouldRespondWhenRouteMatches() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/v1/customers/*')
             .thenRespond(200, '{"id":"c1"}', new Map<String, String>{ 'X-Request-Id' => 'r1' });
@@ -15,7 +19,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldReturnEmptyBodyAndStatus_WhenNotProvided() {
+    static void shouldReturnEmptyBodyAndStatusWhenNotProvided() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(418, null);
 
         HttpResponse response = mock.respond(request('GET', 'callout:API/a'));
@@ -25,7 +29,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldPlaySequence_AndRepeatLast() {
+    static void shouldPlaySequenceAndRepeatLast() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').thenRespond(200, 'ok');
 
         Integer first = mock.respond(request('GET', 'callout:API/a')).getStatusCode();
@@ -38,7 +42,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldThrowCalloutException_WhenThenThrow() {
+    static void shouldThrowCalloutExceptionWhenThenThrow() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenThrow('Read timed out');
 
         try {
@@ -50,7 +54,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldUseDefaultMessage_WhenThenThrowWithNull() {
+    static void shouldUseDefaultMessageWhenThenThrowWithNull() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenThrow(null);
 
         try {
@@ -62,21 +66,21 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldMatchAnyMethod_WhenWildcard() {
+    static void shouldMatchAnyMethodWhenWildcard() {
         CallwiseMock mock = new CallwiseMock().whenRequest('*', '/a').thenRespond(204, '');
 
         Assert.areEqual(204, mock.respond(request('DELETE', 'callout:API/a')).getStatusCode(), 'Any method');
     }
 
     @IsTest
-    static void shouldIgnoreQuery_WhenPatternHasNoQuestionMark() {
+    static void shouldIgnoreQueryWhenPatternHasNoQuestionMark() {
         CallwiseMock mock = new CallwiseMock().whenRequest('get', '/search').thenRespond(200, '');
 
         Assert.areEqual(200, mock.respond(request('GET', 'callout:API/search?q=x')).getStatusCode(), 'Query ignored');
     }
 
     @IsTest
-    static void shouldMatchQuery_WhenPatternHasQuestionMark() {
+    static void shouldMatchQueryWhenPatternHasQuestionMark() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('GET', '/search?q=a*')
             .thenRespond(200, 'a')
@@ -121,7 +125,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldThrowClearError_WhenNoRouteMatches() {
+    static void shouldThrowClearErrorWhenNoRouteMatches() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '');
 
         try {
@@ -134,7 +138,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldSayNone_WhenNoRoutesRegistered() {
+    static void shouldSayNoneWhenNoRoutesRegistered() {
         try {
             new CallwiseMock().respond(request('GET', 'callout:API/a'));
             Assert.fail('Expected MockException');
@@ -144,7 +148,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldThrow_WhenRouteHasNoResponses() {
+    static void shouldThrowWhenRouteHasNoResponses() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a');
 
         try {
@@ -156,7 +160,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldRejectRoute_WhenMethodIsBlank() {
+    static void shouldRejectRouteWhenMethodIsBlank() {
         try {
             new CallwiseMock().whenRequest('', '/a');
             Assert.fail('Expected MockException');
@@ -166,7 +170,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldRejectResponse_WhenNoRouteStarted() {
+    static void shouldRejectResponseWhenNoRouteStarted() {
         try {
             new CallwiseMock().thenRespond(200, '');
             Assert.fail('Expected MockException');
@@ -176,7 +180,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldRejectResponse_WhenStatusIsNull() {
+    static void shouldRejectResponseWhenStatusIsNull() {
         try {
             new CallwiseMock().whenRequest('GET', '/a').thenRespond(null, '');
             Assert.fail('Expected MockException');
@@ -209,7 +213,7 @@ private class CallwiseMockTest {
     }
 
     @IsTest
-    static void shouldServeRealCallouts_WhenInstalled() {
+    static void shouldServeRealCalloutsWhenInstalled() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, 'ok').install();
 
         Test.startTest();

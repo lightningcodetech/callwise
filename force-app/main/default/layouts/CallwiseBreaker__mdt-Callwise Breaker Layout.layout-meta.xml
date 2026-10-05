@@ -26,11 +26,11 @@
         <layoutColumns>
             <layoutItems>
                 <behavior>Edit</behavior>
-                <field>Failure_Threshold__c</field>
+                <field>FailureThreshold__c</field>
             </layoutItems>
             <layoutItems>
                 <behavior>Edit</behavior>
-                <field>Open_Seconds__c</field>
+                <field>OpenSeconds__c</field>
             </layoutItems>
         </layoutColumns>
         <style>TwoColumnsTopToBottom</style>

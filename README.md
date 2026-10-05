@@ -69,7 +69,7 @@ Or deploy the source directly: `sf project deploy start --source-dir force-app -
    transaction. Use another partition with `Callwise.setCachePartition('local.MyPartition')`.
 3. **Circuit breaker settings (optional).** By default a Named Credential's circuit opens after 5 consecutive failures
    for 60 s. To change that, add a `Callwise Breaker` custom metadata record named after the Named Credential, with
-   `Failure_Threshold__c` and `Open_Seconds__c`.
+   `FailureThreshold__c` and `OpenSeconds__c`.
 
 ## Usage
 

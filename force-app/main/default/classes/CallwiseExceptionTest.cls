@@ -1,7 +1,10 @@
+/**
+ * @description Tests for the CallwiseException factories.
+ */
 @IsTest
 private class CallwiseExceptionTest {
     @IsTest
-    static void shouldSetReasonAndMessage_WhenCreated() {
+    static void shouldSetReasonAndMessageWhenCreated() {
         CallwiseException failure = CallwiseException.create(CallwiseException.FailureReason.TRANSPORT, 'boom');
 
         Assert.areEqual(CallwiseException.FailureReason.TRANSPORT, failure.reason, 'Reason should be kept');
@@ -10,7 +13,7 @@ private class CallwiseExceptionTest {
     }
 
     @IsTest
-    static void shouldPreserveCause_WhenCreatedWithCause() {
+    static void shouldPreserveCauseWhenCreatedWithCause() {
         CalloutException cause = new CalloutException('socket closed');
 
         CallwiseException failure = CallwiseException.create(
@@ -24,7 +27,7 @@ private class CallwiseExceptionTest {
     }
 
     @IsTest
-    static void shouldCarryResponse_WhenBuiltFromResponse() {
+    static void shouldCarryResponseWhenBuiltFromResponse() {
         CallwiseResponse response = buildResponse(503, 'Service Unavailable');
 
         CallwiseException failure = CallwiseException.fromResponse(response);
@@ -35,14 +38,14 @@ private class CallwiseExceptionTest {
     }
 
     @IsTest
-    static void shouldOmitStatusText_WhenStatusIsBlank() {
+    static void shouldOmitStatusTextWhenStatusIsBlank() {
         CallwiseException failure = CallwiseException.fromResponse(buildResponse(500, null));
 
         Assert.areEqual('HTTP 500', failure.getMessage(), 'Message should only contain the code');
     }
 
     @IsTest
-    static void shouldThrowInvalidRequest_WhenResponseIsNull() {
+    static void shouldThrowInvalidRequestWhenResponseIsNull() {
         try {
             CallwiseException.fromResponse(null);
             Assert.fail('Expected CallwiseException');
