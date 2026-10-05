@@ -1,8 +1,10 @@
 /**
  * @description Tests for the CallwiseRequest builder: validation of the Named Credential, path, headers, parameters,
  * body, timeout and callbacks, idempotency and the platform HttpRequest it builds.
+ *
+ * Not parallel: a test calls sendAsync(), which runs System.enqueueJob(), and parallel tests cannot enqueue jobs.
  */
-@IsTest
+@IsTest(IsParallel=false)
 public class CallwiseRequestTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
 

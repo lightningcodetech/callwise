@@ -1,7 +1,7 @@
 /**
  * @description Tests for the CallwiseException factories.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseExceptionTest {
     @IsTest
     static void shouldSetReasonAndMessageWhenCreated() {

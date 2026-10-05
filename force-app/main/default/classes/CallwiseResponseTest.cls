@@ -2,7 +2,7 @@
  * @description Tests for CallwiseResponse: copy of status, body and headers, Retry-After in both forms, status helpers
  * and deserialization.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseResponseTest {
     private static final String CUSTOMER_JSON = '{"id":"cus_123","name":"Ada","unknown":true}';
 

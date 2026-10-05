@@ -2,7 +2,7 @@
  * @description Tests for CallwiseMock: route matching with wildcards and query strings, response sequences, failures
  * and request counting.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseMockTest {
     @IsTest
     static void shouldRespondWhenRouteMatches() {

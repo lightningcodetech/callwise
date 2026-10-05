@@ -2,7 +2,7 @@
  * @description Tests for CallwiseEngine.send(): transport-error translation, synchronous retries, idempotency,
  * Retry-After, the limits budget and the circuit breaker.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseEngineTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
 
