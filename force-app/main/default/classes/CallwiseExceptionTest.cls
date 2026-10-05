@@ -54,6 +54,31 @@ private class CallwiseExceptionTest {
         }
     }
 
+    @IsTest
+    static void shouldCreateInvalidRequest() {
+        CallwiseException failure = CallwiseException.invalidRequest('Bad argument');
+
+        Assert.areEqual(CallwiseException.FailureReason.INVALID_REQUEST, failure.reason, 'Reason should be set');
+        Assert.areEqual('Bad argument', failure.getMessage(), 'Message should be kept');
+        Assert.isNull(failure.response, 'No response for INVALID_REQUEST');
+    }
+
+    @IsTest
+    static void shouldClassifyTransportFailures() {
+        Set<CallwiseException.FailureReason> transport = new Set<CallwiseException.FailureReason>{
+            CallwiseException.FailureReason.TRANSPORT,
+            CallwiseException.FailureReason.TIMEOUT
+        };
+
+        for (CallwiseException.FailureReason reason : CallwiseException.FailureReason.values()) {
+            Assert.areEqual(
+                transport.contains(reason),
+                CallwiseException.create(reason, 'x').isTransportFailure(),
+                reason + ' classification'
+            );
+        }
+    }
+
     private static CallwiseResponse buildResponse(Integer statusCode, String status) {
         HttpResponse raw = new HttpResponse();
         raw.setStatusCode(statusCode);

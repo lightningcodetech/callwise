@@ -68,6 +68,16 @@ public inherited sharing class CallwiseException extends Exception {
     }
 
     /**
+     * @description Creates an INVALID_REQUEST exception, for invalid arguments or configuration.
+     *
+     * @param message `String` Description of the invalid argument. Must not contain request or response bodies.
+     * @return `CallwiseException` The exception, ready to throw
+     */
+    public static CallwiseException invalidRequest(String message) {
+        return create(FailureReason.INVALID_REQUEST, message);
+    }
+
+    /**
      * @description Creates an HTTP_ERROR exception that carries the response.
      *
      * @param response `CallwiseResponse` Non-successful response
@@ -76,7 +86,7 @@ public inherited sharing class CallwiseException extends Exception {
      */
     public static CallwiseException fromResponse(CallwiseResponse response) {
         if (response == null) {
-            throw create(FailureReason.INVALID_REQUEST, 'Cannot build an HTTP error from a null response.');
+            throw invalidRequest('Cannot build an HTTP error from a null response.');
         }
         CallwiseException failure = create(
             FailureReason.HTTP_ERROR,
@@ -86,5 +96,15 @@ public inherited sharing class CallwiseException extends Exception {
         );
         failure.response = response;
         return failure;
+    }
+
+    /**
+     * @description Tells whether the callout failed below HTTP. Retry policies and the circuit breaker treat these
+     * failures as signs of an unhealthy endpoint.
+     *
+     * @return `Boolean` True for TRANSPORT and TIMEOUT
+     */
+    public Boolean isTransportFailure() {
+        return reason == FailureReason.TRANSPORT || reason == FailureReason.TIMEOUT;
     }
 }

@@ -11,6 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   returns the seconds until the date (0 when it has passed), so async backoff and the sync retry rule honour it.
 - Circuit breaker settings per Named Credential: a `CallwiseBreaker__mdt` record named after the Named Credential
   sets `FailureThreshold__c` (1–100, default 5) and `OpenSeconds__c` (1–3600, default 60).
+- `CallwiseException.invalidRequest(message)` and `isTransportFailure()`.
 
 ## [0.1.0] - 2026-10-04
 

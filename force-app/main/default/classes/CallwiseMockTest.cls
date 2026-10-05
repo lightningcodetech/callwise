@@ -132,8 +132,11 @@ private class CallwiseMockTest {
             mock.respond(request('POST', 'callout:API/b'));
             Assert.fail('Expected MockException');
         } catch (CallwiseMock.MockException e) {
-            Assert.isTrue(e.getMessage().contains('POST /b'), 'Message should show the request');
-            Assert.isTrue(e.getMessage().contains('GET /a'), 'Message should list registered routes');
+            Assert.areEqual(
+                'No CallwiseMock route matches POST /b. Registered routes: GET /a',
+                e.getMessage(),
+                'Message should show the request and the registered routes'
+            );
         }
     }
 
