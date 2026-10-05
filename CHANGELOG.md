@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-05
+
 ### Added
 
 - `Retry-After` in HTTP-date form (IMF-fixdate, e.g. `Wed, 21 Oct 2026 07:28:00 GMT`): `getRetryAfterSeconds()`
@@ -39,5 +41,6 @@ First release.
 - Apex tests (187 tests, 98% coverage; the uncovered lines are Platform Cache reads and writes, which need a
   partition, and the enqueue of a chained async attempt, which Apex tests cannot run).
 
-[Unreleased]: https://github.com/lightningcodetech/callwise/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lightningcodetech/callwise/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lightningcodetech/callwise/releases/tag/v0.2.0
 [0.1.0]: https://github.com/lightningcodetech/callwise/releases/tag/v0.1.0

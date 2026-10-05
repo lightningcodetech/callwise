@@ -4,8 +4,8 @@
             "path": "force-app",
             "default": true,
             "package": "Callwise",
-            "versionName": "v0.1",
-            "versionNumber": "0.1.0.NEXT",
+            "versionName": "v0.2",
+            "versionNumber": "0.2.0.NEXT",
             "versionDescription": "Resilient REST callouts for Salesforce: idempotency-aware retries, limits budgeting, async backoff, circuit breaker and declarative test mocks."
         }
     ],
