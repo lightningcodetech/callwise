@@ -38,7 +38,7 @@ private class CallwiseCircuitBreakerTest {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
-        breaker.record(response(200), null);
+        breaker.record(CallwiseTestData.response(200), null);
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
 
         Assert.areEqual(
@@ -76,7 +76,7 @@ private class CallwiseCircuitBreakerTest {
         CallwiseCircuitBreaker.nowOverride = T0 + CallwiseCircuitBreaker.OPEN_DURATION_MS;
         breaker.allowRequest();
 
-        breaker.record(response(204), null);
+        breaker.record(CallwiseTestData.response(204), null);
 
         Assert.areEqual(CallwiseCircuitBreaker.CircuitStatus.CLOSED, breaker.getStatus(), 'Successful trial closes');
         Assert.isTrue(breaker.allowRequest(), 'Closed circuit allows requests');
@@ -89,7 +89,7 @@ private class CallwiseCircuitBreakerTest {
         CallwiseCircuitBreaker.nowOverride = trialAt;
         breaker.allowRequest();
 
-        breaker.record(response(503), null);
+        breaker.record(CallwiseTestData.response(503), null);
 
         Assert.areEqual(CallwiseCircuitBreaker.CircuitStatus.OPEN, breaker.getStatus(), 'Failed trial reopens');
         Assert.isFalse(breaker.allowRequest(), 'Reopened circuit rejects requests');
@@ -113,7 +113,7 @@ private class CallwiseCircuitBreakerTest {
         for (Integer statusCode : new List<Integer>{ 500, 502, 503, 504, 408, 429 }) {
             CallwiseCircuitBreaker breaker = new CallwiseCircuitBreaker('Status_' + statusCode);
             for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
-                breaker.record(response(statusCode), null);
+                breaker.record(CallwiseTestData.response(statusCode), null);
             }
             Assert.areEqual(
                 CallwiseCircuitBreaker.CircuitStatus.OPEN,
@@ -128,7 +128,7 @@ private class CallwiseCircuitBreakerTest {
         CallwiseCircuitBreaker breaker = newBreaker();
         fail(breaker, CallwiseCircuitBreaker.FAILURE_THRESHOLD - 1);
 
-        breaker.record(response(404), null);
+        breaker.record(CallwiseTestData.response(404), null);
         fail(breaker, 1);
 
         Assert.areEqual(
@@ -143,7 +143,7 @@ private class CallwiseCircuitBreakerTest {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
-            breaker.record(null, failure(CallwiseException.FailureReason.TIMEOUT));
+            breaker.record(null, CallwiseTestData.failure(CallwiseException.FailureReason.TIMEOUT));
         }
 
         Assert.areEqual(CallwiseCircuitBreaker.CircuitStatus.OPEN, breaker.getStatus(), 'Timeouts open the circuit');
@@ -154,8 +154,8 @@ private class CallwiseCircuitBreakerTest {
         CallwiseCircuitBreaker breaker = newBreaker();
 
         for (Integer i = 0; i < CallwiseCircuitBreaker.FAILURE_THRESHOLD; i++) {
-            breaker.record(null, failure(CallwiseException.FailureReason.UNCOMMITTED_WORK));
-            breaker.record(null, failure(CallwiseException.FailureReason.LIMIT_BUDGET));
+            breaker.record(null, CallwiseTestData.failure(CallwiseException.FailureReason.UNCOMMITTED_WORK));
+            breaker.record(null, CallwiseTestData.failure(CallwiseException.FailureReason.LIMIT_BUDGET));
             breaker.record(null, null);
         }
 
@@ -370,18 +370,8 @@ private class CallwiseCircuitBreakerTest {
 
     private static void fail(CallwiseCircuitBreaker breaker, Integer times) {
         for (Integer i = 0; i < times; i++) {
-            breaker.record(null, failure(CallwiseException.FailureReason.TRANSPORT));
+            breaker.record(null, CallwiseTestData.failure(CallwiseException.FailureReason.TRANSPORT));
         }
-    }
-
-    private static CallwiseException failure(CallwiseException.FailureReason reason) {
-        return CallwiseException.create(reason, 'test');
-    }
-
-    private static CallwiseResponse response(Integer statusCode) {
-        HttpResponse raw = new HttpResponse();
-        raw.setStatusCode(statusCode);
-        return new CallwiseResponse(raw, 1, 0L);
     }
 
     /**

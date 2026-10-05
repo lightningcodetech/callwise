@@ -123,9 +123,6 @@ private class CallwiseTest {
     }
 
     private static CallwiseResponse response() {
-        HttpResponse raw = new HttpResponse();
-        raw.setStatusCode(201);
-        raw.setBody('{"id":"o1"}');
-        return new CallwiseResponse(raw, 1, 40L);
+        return new CallwiseResponse(CallwiseTestData.httpResponse(201, null, '{"id":"o1"}', null), 1, 40L);
     }
 }

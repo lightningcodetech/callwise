@@ -8,7 +8,11 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldCopyStatusBodyAndMetricsWhenBuilt() {
-        CallwiseResponse response = new CallwiseResponse(raw(201, 'Created', CUSTOMER_JSON, null), 2, 150L);
+        CallwiseResponse response = new CallwiseResponse(
+            CallwiseTestData.httpResponse(201, 'Created', CUSTOMER_JSON, null),
+            2,
+            150L
+        );
 
         Assert.areEqual(201, response.getStatusCode(), 'Status code should be copied');
         Assert.areEqual('Created', response.getStatus(), 'Status text should be copied');
@@ -19,7 +23,11 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldDefaultMetricsWhenNull() {
-        CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', '', null), null, null);
+        CallwiseResponse response = new CallwiseResponse(
+            CallwiseTestData.httpResponse(200, 'OK', '', null),
+            null,
+            null
+        );
 
         Assert.areEqual(1, response.getAttempts(), 'Null attempts should default to 1');
         Assert.areEqual(0L, response.getElapsedMs(), 'Null elapsed should default to 0');
@@ -138,7 +146,7 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldClassifySuccess() {
-        CallwiseResponse response = new CallwiseResponse(raw(204, null, null, null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(CallwiseTestData.httpResponse(204, null, null, null), 1, 0L);
 
         Assert.isTrue(response.isSuccess(), '204 is a success');
         Assert.isFalse(response.isClientError(), '204 is not a client error');
@@ -147,7 +155,7 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldClassifyClientError() {
-        CallwiseResponse response = new CallwiseResponse(raw(404, null, null, null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(CallwiseTestData.httpResponse(404, null, null, null), 1, 0L);
 
         Assert.isFalse(response.isSuccess(), '404 is not a success');
         Assert.isTrue(response.isClientError(), '404 is a client error');
@@ -156,7 +164,7 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldClassifyServerError() {
-        CallwiseResponse response = new CallwiseResponse(raw(503, null, null, null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(CallwiseTestData.httpResponse(503, null, null, null), 1, 0L);
 
         Assert.isFalse(response.isSuccess(), '503 is not a success');
         Assert.isFalse(response.isClientError(), '503 is not a client error');
@@ -165,7 +173,11 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldDeserializeIntoTypeIgnoringUnknownFields() {
-        CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', CUSTOMER_JSON, null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(
+            CallwiseTestData.httpResponse(200, 'OK', CUSTOMER_JSON, null),
+            1,
+            0L
+        );
 
         Customer parsed = (Customer) response.deserialize(Customer.class);
 
@@ -175,7 +187,7 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldReturnNullWhenDeserializingBlankBody() {
-        CallwiseResponse response = new CallwiseResponse(raw(204, null, '', null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(CallwiseTestData.httpResponse(204, null, '', null), 1, 0L);
 
         Assert.isNull(response.deserialize(Customer.class), 'Blank body should deserialize to null');
         Assert.isNull(response.deserializeUntyped(), 'Blank body should deserialize untyped to null');
@@ -183,7 +195,11 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldThrowInvalidRequestWhenDeserializeTypeIsNull() {
-        CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', CUSTOMER_JSON, null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(
+            CallwiseTestData.httpResponse(200, 'OK', CUSTOMER_JSON, null),
+            1,
+            0L
+        );
 
         try {
             response.deserialize(null);
@@ -195,7 +211,11 @@ private class CallwiseResponseTest {
 
     @IsTest
     static void shouldDeserializeUntyped() {
-        CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', CUSTOMER_JSON, null), 1, 0L);
+        CallwiseResponse response = new CallwiseResponse(
+            CallwiseTestData.httpResponse(200, 'OK', CUSTOMER_JSON, null),
+            1,
+            0L
+        );
 
         Map<String, Object> parsed = (Map<String, Object>) response.deserializeUntyped();
 
@@ -203,28 +223,11 @@ private class CallwiseResponseTest {
     }
 
     private static CallwiseResponse withHeaders(Map<String, String> headers) {
-        return new CallwiseResponse(raw(200, 'OK', '', headers), 1, 0L);
+        return new CallwiseResponse(CallwiseTestData.httpResponse(200, 'OK', '', headers), 1, 0L);
     }
 
     private static Long retryAfter(String value) {
         return withHeaders(new Map<String, String>{ 'Retry-After' => value }).getRetryAfterSeconds();
-    }
-
-    private static HttpResponse raw(Integer statusCode, String status, String body, Map<String, String> headers) {
-        HttpResponse response = new HttpResponse();
-        response.setStatusCode(statusCode);
-        if (status != null) {
-            response.setStatus(status);
-        }
-        if (body != null) {
-            response.setBody(body);
-        }
-        if (headers != null) {
-            for (String name : headers.keySet()) {
-                response.setHeader(name, headers.get(name));
-            }
-        }
-        return response;
     }
 
     /**

@@ -80,11 +80,6 @@ private class CallwiseExceptionTest {
     }
 
     private static CallwiseResponse buildResponse(Integer statusCode, String status) {
-        HttpResponse raw = new HttpResponse();
-        raw.setStatusCode(statusCode);
-        if (status != null) {
-            raw.setStatus(status);
-        }
-        return new CallwiseResponse(raw, 1, 0L);
+        return new CallwiseResponse(CallwiseTestData.httpResponse(statusCode, status, null, null), 1, 0L);
     }
 }

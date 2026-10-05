@@ -118,10 +118,13 @@ private class CallwiseRetryPolicyTest {
         CallwiseRequest request = Callwise.to('API').get('/a');
 
         Assert.isTrue(
-            policy.isRetryable(request, null, failure(CallwiseException.FailureReason.TRANSPORT)),
+            policy.isRetryable(request, null, CallwiseTestData.failure(CallwiseException.FailureReason.TRANSPORT)),
             'TRANSPORT'
         );
-        Assert.isTrue(policy.isRetryable(request, null, failure(CallwiseException.FailureReason.TIMEOUT)), 'TIMEOUT');
+        Assert.isTrue(
+            policy.isRetryable(request, null, CallwiseTestData.failure(CallwiseException.FailureReason.TIMEOUT)),
+            'TIMEOUT'
+        );
     }
 
     @IsTest
@@ -130,7 +133,7 @@ private class CallwiseRetryPolicyTest {
         CallwiseRequest request = Callwise.to('API').get('/a');
 
         Assert.isFalse(
-            policy.isRetryable(request, null, failure(CallwiseException.FailureReason.CIRCUIT_OPEN)),
+            policy.isRetryable(request, null, CallwiseTestData.failure(CallwiseException.FailureReason.CIRCUIT_OPEN)),
             'CIRCUIT_OPEN is not retried'
         );
     }
@@ -140,7 +143,11 @@ private class CallwiseRetryPolicyTest {
         CallwiseRetryPolicy policy = CallwiseRetryPolicy.none();
 
         Assert.isFalse(
-            policy.isRetryable(Callwise.to('API').get('/a'), null, failure(CallwiseException.FailureReason.TRANSPORT)),
+            policy.isRetryable(
+                Callwise.to('API').get('/a'),
+                null,
+                CallwiseTestData.failure(CallwiseException.FailureReason.TRANSPORT)
+            ),
             'none() does not retry transport errors'
         );
     }
@@ -216,16 +223,10 @@ private class CallwiseRetryPolicyTest {
         }
     }
 
-    private static CallwiseException failure(CallwiseException.FailureReason reason) {
-        return CallwiseException.create(reason, 'test');
-    }
-
     private static CallwiseResponse response(Integer statusCode, String retryAfter) {
-        HttpResponse raw = new HttpResponse();
-        raw.setStatusCode(statusCode);
-        if (retryAfter != null) {
-            raw.setHeader('Retry-After', retryAfter);
-        }
-        return new CallwiseResponse(raw, 1, 0L);
+        return CallwiseTestData.response(
+            statusCode,
+            retryAfter == null ? null : new Map<String, String>{ 'Retry-After' => retryAfter }
+        );
     }
 }
