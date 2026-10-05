@@ -1,5 +1,5 @@
 /**
- * Serializable snapshot of an HTTP response. HttpResponse cannot be serialized, so Callwise copies status,
+ * @description Serializable snapshot of an HTTP response. HttpResponse cannot be serialized, so Callwise copies status,
  * body and headers into this class; that lets async jobs carry responses in their state.
  * Header names are stored in lower case and looked up case-insensitively.
  *
@@ -10,10 +10,11 @@
  * }
  */
 public inherited sharing class CallwiseResponse {
-    /** IMF-fixdate, the HTTP-date form senders must use (RFC 9110, section 5.6.7). */
+    /** @description IMF-fixdate, the HTTP-date form senders must use (RFC 9110, section 5.6.7). */
     private static final Pattern IMF_FIXDATE = Pattern.compile(
         '^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\\d{4}) (\\d{2}):(\\d{2}):(\\d{2}) GMT$'
     );
+    /** @description Month abbreviations of IMF-fixdate, in calendar order. */
     private static final List<String> MONTHS = new List<String>{
         'Jan',
         'Feb',
@@ -29,24 +30,30 @@ public inherited sharing class CallwiseResponse {
         'Dec'
     };
 
-    /** Replaces the clock in tests. */
+    /** @description Replaces the clock in tests. */
     @TestVisible
     private static Long nowOverride;
 
+    /** @description HTTP status code. */
     private final Integer statusCode;
+    /** @description HTTP reason phrase; may be blank. */
     private final String status;
+    /** @description Response body; may be null or empty. */
     private final String body;
+    /** @description Headers keyed by lower-case name. */
     private final Map<String, String> headersByLowerName = new Map<String, String>();
+    /** @description Attempts made to obtain this response. */
     private final Integer attempts;
+    /** @description Wall-clock time across all attempts, in milliseconds. */
     private final Long elapsedMs;
 
     /**
-     * Copies the relevant parts of a platform HttpResponse.
+     * @description Copies the relevant parts of a platform HttpResponse.
      *
-     * @param response Platform response
-     * @param attempts Number of attempts made to obtain this response (1 = no retries)
-     * @param elapsedMs Wall-clock time across all attempts, in milliseconds
-     * @throws CallwiseException INVALID_REQUEST when response is null
+     * @param response `HttpResponse` Platform response
+     * @param attempts `Integer` Number of attempts made to obtain this response (1 = no retries)
+     * @param elapsedMs `Long` Wall-clock time across all attempts, in milliseconds
+     * @throws `CallwiseException` INVALID_REQUEST when response is null
      */
     public CallwiseResponse(HttpResponse response, Integer attempts, Long elapsedMs) {
         if (response == null) {
@@ -69,60 +76,75 @@ public inherited sharing class CallwiseResponse {
     }
 
     /**
-     * @return HTTP status code, e.g. 200
+     * @description Returns the HTTP status code.
+     *
+     * @return `Integer` HTTP status code, e.g. 200
      */
     public Integer getStatusCode() {
         return statusCode;
     }
 
     /**
-     * @return HTTP reason phrase, e.g. 'OK'. May be blank.
+     * @description Returns the HTTP reason phrase.
+     *
+     * @return `String` HTTP reason phrase, e.g. 'OK'. May be blank.
      */
     public String getStatus() {
         return status;
     }
 
     /**
-     * @return Raw response body. May be null or empty.
+     * @description Returns the response body as received.
+     *
+     * @return `String` Raw response body. May be null or empty.
      */
     public String getBody() {
         return body;
     }
 
     /**
-     * @param name Header name, any case
-     * @return Header value, or null when absent
+     * @description Returns one header, looked up case-insensitively.
+     *
+     * @param name `String` Header name, any case
+     * @return `String` Header value, or null when absent
      */
     public String getHeader(String name) {
         return String.isBlank(name) ? null : headersByLowerName.get(name.toLowerCase());
     }
 
     /**
-     * @return Copy of all headers, keyed by lower-case name
+     * @description Returns every response header.
+     *
+     * @return `Map<String, String>` Copy of all headers, keyed by lower-case name
      */
     public Map<String, String> getHeaders() {
         return headersByLowerName.clone();
     }
 
     /**
-     * @return Number of attempts made to obtain this response (1 = no retries)
+     * @description Returns how many attempts were made to obtain this response.
+     *
+     * @return `Integer` Number of attempts made to obtain this response (1 = no retries)
      */
     public Integer getAttempts() {
         return attempts;
     }
 
     /**
-     * @return Wall-clock time across all attempts, in milliseconds
+     * @description Returns the wall-clock time spent obtaining this response.
+     *
+     * @return `Long` Wall-clock time across all attempts, in milliseconds
      */
     public Long getElapsedMs() {
         return elapsedMs;
     }
 
     /**
-     * Parses the Retry-After header, in either form allowed by RFC 9110: delay-seconds (Retry-After: 120) or an
+     * @description Parses the Retry-After header, in either form allowed by RFC 9110: delay-seconds (Retry-After: 120)
+     * or an
      * HTTP date in IMF-fixdate format (Retry-After: Wed, 21 Oct 2026 07:28:00 GMT).
      *
-     * @return Seconds to wait (0 for a date in the past), or null when the header is absent or cannot be parsed
+     * @return `Long` Seconds to wait (0 for a date in the past), or null when the header is absent or cannot be parsed
      */
     public Long getRetryAfterSeconds() {
         String value = getHeader('Retry-After')?.trim();
@@ -136,6 +158,13 @@ public inherited sharing class CallwiseResponse {
         return secondsUntil(value);
     }
 
+    /**
+     * @description Parses an IMF-fixdate and returns the time until it. Dates that do not exist (31 February, hour
+     * 24) are rejected: Datetime would roll them over silently.
+     *
+     * @param httpDate `String` Date such as 'Wed, 21 Oct 2026 07:28:00 GMT'
+     * @return `Long` Seconds until the date, rounded up; 0 when it has passed; null when it cannot be parsed
+     */
     private static Long secondsUntil(String httpDate) {
         Matcher parts = IMF_FIXDATE.matcher(httpDate);
         if (!parts.matches()) {
@@ -164,33 +193,39 @@ public inherited sharing class CallwiseResponse {
     }
 
     /**
-     * @return True for 2xx statuses
+     * @description Tells whether the status is 2xx.
+     *
+     * @return `Boolean` True for 2xx statuses
      */
     public Boolean isSuccess() {
         return statusCode >= 200 && statusCode < 300;
     }
 
     /**
-     * @return True for 4xx statuses
+     * @description Tells whether the status is 4xx.
+     *
+     * @return `Boolean` True for 4xx statuses
      */
     public Boolean isClientError() {
         return statusCode >= 400 && statusCode < 500;
     }
 
     /**
-     * @return True for 5xx statuses
+     * @description Tells whether the status is 5xx.
+     *
+     * @return `Boolean` True for 5xx statuses
      */
     public Boolean isServerError() {
         return statusCode >= 500 && statusCode < 600;
     }
 
     /**
-     * Deserializes the JSON body into the given type. Unknown properties are ignored.
+     * @description Deserializes the JSON body into the given type. Unknown properties are ignored.
      *
-     * @param targetType Apex type to deserialize into, e.g. Customer.class
-     * @return Deserialized instance, or null when the body is blank
-     * @throws CallwiseException INVALID_REQUEST when targetType is null
-     * @throws JSONException when the body is not valid JSON for targetType
+     * @param targetType `Type` Apex type to deserialize into, e.g. Customer.class
+     * @return `Object` Deserialized instance, or null when the body is blank
+     * @throws `CallwiseException` INVALID_REQUEST when targetType is null
+     * @throws `JSONException` when the body is not valid JSON for targetType
      */
     public Object deserialize(Type targetType) {
         if (targetType == null) {
@@ -203,10 +238,10 @@ public inherited sharing class CallwiseResponse {
     }
 
     /**
-     * Deserializes the JSON body into maps, lists and primitives.
+     * @description Deserializes the JSON body into maps, lists and primitives.
      *
-     * @return Deserialized value, or null when the body is blank
-     * @throws JSONException when the body is not valid JSON
+     * @return `Object` Deserialized value, or null when the body is blank
+     * @throws `JSONException` when the body is not valid JSON
      */
     public Object deserializeUntyped() {
         return String.isBlank(body) ? null : JSON.deserializeUntyped(body);

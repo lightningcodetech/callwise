@@ -1,9 +1,13 @@
+/**
+ * @description Tests for CallwiseResponse: copy of status, body and headers, Retry-After in both forms, status helpers
+ * and deserialization.
+ */
 @IsTest
 private class CallwiseResponseTest {
     private static final String CUSTOMER_JSON = '{"id":"cus_123","name":"Ada","unknown":true}';
 
     @IsTest
-    static void shouldCopyStatusBodyAndMetrics_WhenBuilt() {
+    static void shouldCopyStatusBodyAndMetricsWhenBuilt() {
         CallwiseResponse response = new CallwiseResponse(raw(201, 'Created', CUSTOMER_JSON, null), 2, 150L);
 
         Assert.areEqual(201, response.getStatusCode(), 'Status code should be copied');
@@ -14,7 +18,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldDefaultMetrics_WhenNull() {
+    static void shouldDefaultMetricsWhenNull() {
         CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', '', null), null, null);
 
         Assert.areEqual(1, response.getAttempts(), 'Null attempts should default to 1');
@@ -22,7 +26,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldThrowInvalidRequest_WhenHttpResponseIsNull() {
+    static void shouldThrowInvalidRequestWhenHttpResponseIsNull() {
         try {
             new CallwiseResponse(null, 1, 0L);
             Assert.fail('Expected CallwiseException');
@@ -41,7 +45,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldReturnNull_WhenHeaderNameIsBlankOrMissing() {
+    static void shouldReturnNullWhenHeaderNameIsBlankOrMissing() {
         CallwiseResponse response = withHeaders(new Map<String, String>{ 'X-Request-Id' => 'req-1' });
 
         Assert.isNull(response.getHeader(''), 'Blank name should return null');
@@ -58,35 +62,35 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldParseRetryAfter_WhenNumeric() {
+    static void shouldParseRetryAfterWhenNumeric() {
         CallwiseResponse response = withHeaders(new Map<String, String>{ 'Retry-After' => ' 120 ' });
 
         Assert.areEqual(120L, response.getRetryAfterSeconds(), 'Numeric Retry-After should be parsed');
     }
 
     @IsTest
-    static void shouldParseRetryAfter_WhenHttpDate() {
+    static void shouldParseRetryAfterWhenHttpDate() {
         CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 26, 0).getTime();
 
         Assert.areEqual(120L, retryAfter('Wed, 21 Oct 2026 07:28:00 GMT'), 'Seconds from now until the date');
     }
 
     @IsTest
-    static void shouldRoundHttpDateUp_ToWholeSeconds() {
+    static void shouldRoundHttpDateUpToWholeSeconds() {
         CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 27, 59).getTime() + 500;
 
         Assert.areEqual(1L, retryAfter('Wed, 21 Oct 2026 07:28:00 GMT'), 'Half a second left waits 1 second');
     }
 
     @IsTest
-    static void shouldReturnZero_WhenHttpDateIsInThePast() {
+    static void shouldReturnZeroWhenHttpDateIsInThePast() {
         CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 8, 0, 0).getTime();
 
         Assert.areEqual(0L, retryAfter('Wed, 21 Oct 2026 07:28:00 GMT'), 'A past date means no wait');
     }
 
     @IsTest
-    static void shouldIgnoreRetryAfter_WhenDateIsInvalid() {
+    static void shouldIgnoreRetryAfterWhenDateIsInvalid() {
         CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 0, 0).getTime();
         List<String> invalid = new List<String>{
             'Wed, 31 Feb 2026 07:28:00 GMT', // no 31 February
@@ -105,7 +109,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldUseHttpDate_ForAsyncBackoff() {
+    static void shouldUseHttpDateForAsyncBackoff() {
         CallwiseResponse.nowOverride = Datetime.newInstanceGmt(2026, 10, 21, 7, 25, 30).getTime();
         CallwiseResponse response = withHeaders(
             new Map<String, String>{ 'Retry-After' => 'Wed, 21 Oct 2026 07:28:00 GMT' }
@@ -119,14 +123,14 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldIgnoreRetryAfter_WhenTooLong() {
+    static void shouldIgnoreRetryAfterWhenTooLong() {
         CallwiseResponse response = withHeaders(new Map<String, String>{ 'Retry-After' => '1234567890123456789' });
 
         Assert.isNull(response.getRetryAfterSeconds(), 'Values longer than 18 digits are ignored');
     }
 
     @IsTest
-    static void shouldReturnNullRetryAfter_WhenAbsent() {
+    static void shouldReturnNullRetryAfterWhenAbsent() {
         CallwiseResponse response = withHeaders(new Map<String, String>());
 
         Assert.isNull(response.getRetryAfterSeconds(), 'Missing header should return null');
@@ -160,7 +164,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldDeserializeIntoType_IgnoringUnknownFields() {
+    static void shouldDeserializeIntoTypeIgnoringUnknownFields() {
         CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', CUSTOMER_JSON, null), 1, 0L);
 
         Customer parsed = (Customer) response.deserialize(Customer.class);
@@ -170,7 +174,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldReturnNull_WhenDeserializingBlankBody() {
+    static void shouldReturnNullWhenDeserializingBlankBody() {
         CallwiseResponse response = new CallwiseResponse(raw(204, null, '', null), 1, 0L);
 
         Assert.isNull(response.deserialize(Customer.class), 'Blank body should deserialize to null');
@@ -178,7 +182,7 @@ private class CallwiseResponseTest {
     }
 
     @IsTest
-    static void shouldThrowInvalidRequest_WhenDeserializeTypeIsNull() {
+    static void shouldThrowInvalidRequestWhenDeserializeTypeIsNull() {
         CallwiseResponse response = new CallwiseResponse(raw(200, 'OK', CUSTOMER_JSON, null), 1, 0L);
 
         try {
@@ -223,6 +227,9 @@ private class CallwiseResponseTest {
         return response;
     }
 
+    /**
+     * @description Target type for deserialize().
+     */
     public class Customer {
         public String id;
         public String name;

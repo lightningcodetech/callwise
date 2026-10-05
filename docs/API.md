@@ -161,10 +161,10 @@ One breaker per Named Credential: `CLOSED → OPEN` after 5 consecutive failures
 **Settings per Named Credential.** Create a `Callwise Breaker` custom metadata record (Setup → Custom Metadata
 Types) whose **name is the Named Credential API name**:
 
-| Field                  | Range  | Default |
-| ---------------------- | ------ | ------- |
-| `Failure_Threshold__c` | 1–100  | 5       |
-| `Open_Seconds__c`      | 1–3600 | 60      |
+| Field                 | Range  | Default |
+| --------------------- | ------ | ------- |
+| `FailureThreshold__c` | 1–100  | 5       |
+| `OpenSeconds__c`      | 1–3600 | 60      |
 
 A blank or out-of-range field uses its default. Records are read with `getInstance()`, which does not count against
 SOQL limits, and apply to `send()` and `sendAsync()` alike.

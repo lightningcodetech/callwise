@@ -1,9 +1,13 @@
+/**
+ * @description Tests for the CallwiseRequest builder: validation of the Named Credential, path, headers, parameters,
+ * body, timeout and callbacks, idempotency and the platform HttpRequest it builds.
+ */
 @IsTest
 public class CallwiseRequestTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
 
     @IsTest
-    static void shouldApplyDefaults_WhenCreated() {
+    static void shouldApplyDefaultsWhenCreated() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL);
 
         Assert.areEqual(NAMED_CREDENTIAL, request.getNamedCredential(), 'Named Credential should be kept');
@@ -16,22 +20,22 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldRejectNamedCredential_WhenBlank() {
+    static void shouldRejectNamedCredentialWhenBlank() {
         assertInvalidNamedCredential(' ');
     }
 
     @IsTest
-    static void shouldRejectNamedCredential_WhenNull() {
+    static void shouldRejectNamedCredentialWhenNull() {
         assertInvalidNamedCredential(null);
     }
 
     @IsTest
-    static void shouldRejectNamedCredential_WhenCalloutPrefixUsed() {
+    static void shouldRejectNamedCredentialWhenCalloutPrefixUsed() {
         assertInvalidNamedCredential('callout:Test_API');
     }
 
     @IsTest
-    static void shouldRejectNamedCredential_WhenRawUrl() {
+    static void shouldRejectNamedCredentialWhenRawUrl() {
         assertInvalidNamedCredential('https://api.example.com');
     }
 
@@ -52,7 +56,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldAddLeadingSlash_WhenPathIsRelative() {
+    static void shouldAddLeadingSlashWhenPathIsRelative() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).get('v1/customers');
 
         Assert.areEqual('/v1/customers', request.getPath(), 'Leading slash should be added');
@@ -60,7 +64,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldUseCredentialRoot_WhenPathIsBlank() {
+    static void shouldUseCredentialRootWhenPathIsBlank() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).get(null);
 
         Assert.areEqual('', request.getPath(), 'Blank path stays empty');
@@ -75,7 +79,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldRejectPath_WhenAbsoluteUrl() {
+    static void shouldRejectPathWhenAbsoluteUrl() {
         try {
             Callwise.to(NAMED_CREDENTIAL).get('https://evil.example.com/steal');
             Assert.fail('Expected CallwiseException');
@@ -85,7 +89,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldEncodeParams_InCallOrder() {
+    static void shouldEncodeParamsInCallOrder() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .get('/search')
             .param('q', 'a b&c')
@@ -101,14 +105,14 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldAppendParams_WhenPathHasQuery() {
+    static void shouldAppendParamsWhenPathHasQuery() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).get('/search?limit=10').param('q', 'x');
 
         Assert.areEqual('callout:Test_API/search?limit=10&q=x', request.getEndpoint(), 'Params join with &');
     }
 
     @IsTest
-    static void shouldRejectParam_WhenNameIsBlank() {
+    static void shouldRejectParamWhenNameIsBlank() {
         try {
             Callwise.to(NAMED_CREDENTIAL).get('/a').param('', 'x');
             Assert.fail('Expected CallwiseException');
@@ -118,7 +122,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldReplaceHeader_CaseInsensitively() {
+    static void shouldReplaceHeaderCaseInsensitively() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .get('/a')
             .header('X-Trace', 'one')
@@ -130,14 +134,14 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldSendEmptyString_WhenHeaderValueIsNull() {
+    static void shouldSendEmptyStringWhenHeaderValueIsNull() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).get('/a').header('X-Empty', null);
 
         Assert.areEqual('', request.getHeaders().get('X-Empty'), 'Null header value becomes empty string');
     }
 
     @IsTest
-    static void shouldRejectHeader_WhenNameIsBlank() {
+    static void shouldRejectHeaderWhenNameIsBlank() {
         try {
             Callwise.to(NAMED_CREDENTIAL).get('/a').header(null, 'x');
             Assert.fail('Expected CallwiseException');
@@ -172,7 +176,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldKeepExistingContentType_WhenJsonBody() {
+    static void shouldKeepExistingContentTypeWhenJsonBody() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .post('/a')
             .header('content-type', 'application/vnd.api+json')
@@ -184,24 +188,24 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldSetTimeout_WhenInRange() {
+    static void shouldSetTimeoutWhenInRange() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).timeout(CallwiseRequest.MAX_TIMEOUT_MS);
 
         Assert.areEqual(CallwiseRequest.MAX_TIMEOUT_MS, request.getTimeoutMs(), 'Upper bound is allowed');
     }
 
     @IsTest
-    static void shouldRejectTimeout_WhenZero() {
+    static void shouldRejectTimeoutWhenZero() {
         assertInvalidTimeout(0);
     }
 
     @IsTest
-    static void shouldRejectTimeout_WhenAboveMax() {
+    static void shouldRejectTimeoutWhenAboveMax() {
         assertInvalidTimeout(CallwiseRequest.MAX_TIMEOUT_MS + 1);
     }
 
     @IsTest
-    static void shouldRejectTimeout_WhenNull() {
+    static void shouldRejectTimeoutWhenNull() {
         assertInvalidTimeout(null);
     }
 
@@ -215,7 +219,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldRejectRetryPolicy_WhenNull() {
+    static void shouldRejectRetryPolicyWhenNull() {
         try {
             Callwise.to(NAMED_CREDENTIAL).retry(null);
             Assert.fail('Expected CallwiseException');
@@ -241,27 +245,27 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldTreatPostAsNonIdempotent_WithoutKey() {
+    static void shouldTreatPostAsNonIdempotentWithoutKey() {
         Assert.isFalse(Callwise.to(NAMED_CREDENTIAL).post('/a').isIdempotent(), 'POST');
         Assert.isFalse(Callwise.to(NAMED_CREDENTIAL).patch('/a').isIdempotent(), 'PATCH');
     }
 
     @IsTest
-    static void shouldTreatPostAsIdempotent_WithKey() {
+    static void shouldTreatPostAsIdempotentWithKey() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').header('idempotency-key', 'k1');
 
         Assert.isTrue(request.isIdempotent(), 'POST with Idempotency-Key is idempotent');
     }
 
     @IsTest
-    static void shouldTreatPostAsNonIdempotent_WithBlankKey() {
+    static void shouldTreatPostAsNonIdempotentWithBlankKey() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').header('Idempotency-Key', ' ');
 
         Assert.isFalse(request.isIdempotent(), 'Blank Idempotency-Key does not count');
     }
 
     @IsTest
-    static void shouldGenerateIdempotencyKey_WhenIdempotentIsCalled() {
+    static void shouldGenerateIdempotencyKeyWhenIdempotentIsCalled() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent();
 
         String key = request.getIdempotencyKey();
@@ -274,7 +278,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldKeepGeneratedKey_WhenIdempotentIsCalledTwice() {
+    static void shouldKeepGeneratedKeyWhenIdempotentIsCalledTwice() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent();
         String firstKey = request.getIdempotencyKey();
 
@@ -284,7 +288,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldGenerateDifferentKeys_ForDifferentRequests() {
+    static void shouldGenerateDifferentKeysForDifferentRequests() {
         String first = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent().getIdempotencyKey();
         String second = Callwise.to(NAMED_CREDENTIAL).post('/a').idempotent().getIdempotencyKey();
 
@@ -292,7 +296,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldKeepCallerKey_WhenIdempotentIsCalled() {
+    static void shouldKeepCallerKeyWhenIdempotentIsCalled() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .post('/a')
             .header('idempotency-key', 'order-42')
@@ -303,7 +307,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldReplaceBlankCallerKey_WhenIdempotentIsCalled() {
+    static void shouldReplaceBlankCallerKeyWhenIdempotentIsCalled() {
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).post('/a').header('Idempotency-Key', ' ').idempotent();
 
         Assert.isNotNull(request.getIdempotencyKey(), 'Blank key is replaced by a generated one');
@@ -311,7 +315,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldReturnNullIdempotencyKey_WhenAbsent() {
+    static void shouldReturnNullIdempotencyKeyWhenAbsent() {
         Assert.isNull(Callwise.to(NAMED_CREDENTIAL).post('/a').getIdempotencyKey(), 'No key by default');
     }
 
@@ -332,14 +336,14 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldNotSetBody_WhenNoBody() {
+    static void shouldNotSetBodyWhenNoBody() {
         HttpRequest built = Callwise.to(NAMED_CREDENTIAL).get('/a').toHttpRequest();
 
         Assert.isTrue(String.isBlank(built.getBody()), 'GET without body sends no body');
     }
 
     @IsTest
-    static void shouldRejectHttpRequest_WhenNoMethod() {
+    static void shouldRejectHttpRequestWhenNoMethod() {
         try {
             Callwise.to(NAMED_CREDENTIAL).toHttpRequest();
             Assert.fail('Expected CallwiseException');
@@ -349,7 +353,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldRejectSend_WhenNoMethod() {
+    static void shouldRejectSendWhenNoMethod() {
         try {
             Callwise.to(NAMED_CREDENTIAL).send();
             Assert.fail('Expected CallwiseException');
@@ -359,22 +363,22 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldRejectSendAsync_WhenCallbackTypeIsNull() {
+    static void shouldRejectSendAsyncWhenCallbackTypeIsNull() {
         assertInvalidCallback(null, 'requires a callback type');
     }
 
     @IsTest
-    static void shouldRejectSendAsync_WhenCallbackHasNoDefaultConstructor() {
+    static void shouldRejectSendAsyncWhenCallbackHasNoDefaultConstructor() {
         assertInvalidCallback(NoDefaultConstructor.class, 'cannot be instantiated');
     }
 
     @IsTest
-    static void shouldRejectSendAsync_WhenTypeIsNotACallback() {
+    static void shouldRejectSendAsyncWhenTypeIsNotACallback() {
         assertInvalidCallback(NotACallback.class, 'does not implement Callwise.Callback');
     }
 
     @IsTest
-    static void shouldEnqueueJob_WhenCallbackIsValid() {
+    static void shouldEnqueueJobWhenCallbackIsValid() {
         new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '').install();
 
         Test.startTest();
@@ -385,7 +389,7 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
-    static void shouldRejectSendAsync_WhenMethodIsMissing() {
+    static void shouldRejectSendAsyncWhenMethodIsMissing() {
         try {
             Callwise.to(NAMED_CREDENTIAL).sendAsync();
             Assert.fail('Expected CallwiseException');
@@ -425,6 +429,9 @@ public class CallwiseRequestTest {
         }
     }
 
+    /**
+     * @description JSON payload with an optional field, to check that null fields are omitted.
+     */
     public class Payload {
         public String name;
         public String nickname;
@@ -435,6 +442,9 @@ public class CallwiseRequestTest {
         }
     }
 
+    /**
+     * @description Callback that does nothing; a valid callback type.
+     */
     public class ValidCallback implements Callwise.Callback {
         public void onResponse(CallwiseRequest request, CallwiseResponse response) {
             return;
@@ -445,9 +455,15 @@ public class CallwiseRequestTest {
         }
     }
 
+    /**
+     * @description Class that does not implement Callwise.Callback.
+     */
     public class NotACallback {
     }
 
+    /**
+     * @description Callback without a no-argument constructor, so it cannot be instantiated by type.
+     */
     public class NoDefaultConstructor implements Callwise.Callback {
         public NoDefaultConstructor(String required) {
             return;

@@ -1,3 +1,8 @@
+/**
+ * @description Tests for sendAsync() and CallwiseAsyncJob: enqueueing, backoff between attempts, Retry-After,
+ * idempotency keys across jobs, the circuit breaker, Queueable limits and the callback contract. Apex does not allow
+ * chaining Queueables in tests, so each attempt is run directly.
+ */
 @IsTest
 public class CallwiseAsyncJobTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
@@ -7,7 +12,7 @@ public class CallwiseAsyncJobTest {
     private static List<CallwiseException> failures = new List<CallwiseException>();
 
     @IsTest
-    static void shouldEnqueueJob_AndDeliverResponse() {
+    static void shouldEnqueueJobAndDeliverResponse() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '{"ok":true}').install();
 
         Test.startTest();
@@ -22,7 +27,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldSend_WithoutCallback() {
+    static void shouldSendWithoutCallback() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '').install();
 
         Test.startTest();
@@ -34,7 +39,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldEnqueueNextAttempt_WithBackoff_UntilSuccess() {
+    static void shouldEnqueueNextAttemptWithBackoffUntilSuccess() {
         new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').thenRespond(200, '').install();
 
         Test.startTest();
@@ -52,7 +57,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldDoubleDelay_OnEachAttempt_AndDeliverLastResponse() {
+    static void shouldDoubleDelayOnEachAttemptAndDeliverLastResponse() {
         CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .get('/a')
@@ -91,7 +96,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldReportHttpError_WhenThrowOnErrorAndAttemptsAreExhausted() {
+    static void shouldReportHttpErrorWhenThrowOnErrorAndAttemptsAreExhausted() {
         new CallwiseMock().whenRequest('GET', '/a').thenRespond(500, 'down').install();
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .get('/a')
@@ -108,7 +113,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldReportLastFailure_WhenTransportFailuresExhaustAttempts() {
+    static void shouldReportLastFailureWhenTransportFailuresExhaustAttempts() {
         new CallwiseMock().whenRequest('GET', '/a').thenThrow('Read timed out').install();
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL)
             .get('/a')
@@ -124,7 +129,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldNotRetryPost_WithoutIdempotencyKey() {
+    static void shouldNotRetryPostWithoutIdempotencyKey() {
         new CallwiseMock().whenRequest('POST', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -136,7 +141,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldSendSameIdempotencyKey_OnEveryAsyncAttempt() {
+    static void shouldSendSameIdempotencyKeyOnEveryAsyncAttempt() {
         CallwiseMock mock = new CallwiseMock()
             .whenRequest('POST', '/a')
             .thenRespond(503, '')
@@ -160,7 +165,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldWaitForBreakerTrial_WithoutCallout_WhenCircuitIsOpen() {
+    static void shouldWaitForBreakerTrialWithoutCalloutWhenCircuitIsOpen() {
         CallwiseMock mock = new CallwiseMock().whenRequest('POST', '/a').thenRespond(201, '').install();
         openCircuit();
 
@@ -175,7 +180,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldReportCircuitOpen_OnLastAttempt() {
+    static void shouldReportCircuitOpenOnLastAttempt() {
         openCircuit();
         CallwiseRequest request = Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none());
 
@@ -191,7 +196,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldDeliverLastOutcome_WhenNoQueueableIsLeft() {
+    static void shouldDeliverLastOutcomeWhenNoQueueableIsLeft() {
         new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').install();
 
         Test.startTest();
@@ -204,7 +209,7 @@ public class CallwiseAsyncJobTest {
     }
 
     @IsTest
-    static void shouldThrowLimitBudget_WhenNoQueueableIsLeftForSendAsync() {
+    static void shouldThrowLimitBudgetWhenNoQueueableIsLeftForSendAsync() {
         CallwiseEngine.queueableLimitOverride = Limits.getQueueableJobs();
 
         try {
@@ -237,6 +242,9 @@ public class CallwiseAsyncJobTest {
         }
     }
 
+    /**
+     * @description Callback that records every outcome in the test class, so tests can assert what reached it.
+     */
     public class RecordingCallback implements Callwise.Callback {
         public void onResponse(CallwiseRequest request, CallwiseResponse response) {
             responses.add(response);

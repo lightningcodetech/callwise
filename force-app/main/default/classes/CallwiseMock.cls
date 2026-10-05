@@ -1,5 +1,5 @@
 /**
- * Declarative HttpCalloutMock for tests. Routes match on HTTP method and path; '*' matches any sequence of
+ * @description Declarative HttpCalloutMock for tests. Routes match on HTTP method and path; '*' matches any sequence of
  * characters. Patterns containing '?' are matched against path + query string, others against the path only.
  * Routes are evaluated in registration order and the first match wins.
  *
@@ -15,8 +15,11 @@
  * Assert.areEqual(2, mock.countRequests('GET', '/v1/customers/*'));
  */
 public inherited sharing class CallwiseMock implements HttpCalloutMock {
+    /** @description Prefix of Named Credential endpoints, removed before matching paths. */
     private static final String CALLOUT_PREFIX = 'callout:';
+    /** @description Matches any sequence of characters in a pattern, or any method. */
     private static final String WILDCARD = '*';
+    /** @description Reason phrase sent with each status code; unknown codes get an empty phrase. */
     private static final Map<Integer, String> REASON_PHRASES = new Map<Integer, String>{
         200 => 'OK',
         201 => 'Created',
@@ -36,23 +39,26 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         504 => 'Gateway Timeout'
     };
 
+    /** @description Routes in registration order; the first match wins. */
     private final List<Route> routes = new List<Route>();
+    /** @description Every request received, in order. */
     private final List<HttpRequest> receivedRequests = new List<HttpRequest>();
+    /** @description Route that thenRespond() and thenThrow() add to. */
     private Route currentRoute;
 
     /**
-     * Thrown when the mock is misconfigured or receives a request no route matches.
+     * @description Thrown when the mock is misconfigured or receives a request no route matches.
      */
     public class MockException extends Exception {
     }
 
     /**
-     * Starts a route. Follow with one or more thenRespond() / thenThrow() calls.
+     * @description Starts a route. Follow with one or more thenRespond() / thenThrow() calls.
      *
-     * @param method HTTP method, case-insensitive, or '*' for any
-     * @param pathPattern Path relative to the Named Credential, e.g. '/v1/customers/*'
-     * @return This mock
-     * @throws MockException when method or pathPattern is blank
+     * @param method `String` HTTP method, case-insensitive, or '*' for any
+     * @param pathPattern `String` Path relative to the Named Credential, e.g. '/v1/customers/*'
+     * @return `CallwiseMock` This mock
+     * @throws `MockException` when method or pathPattern is blank
      */
     public CallwiseMock whenRequest(String method, String pathPattern) {
         if (String.isBlank(method) || String.isBlank(pathPattern)) {
@@ -64,25 +70,25 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     }
 
     /**
-     * Adds a response to the current route's sequence.
+     * @description Adds a response to the current route's sequence.
      *
-     * @param statusCode HTTP status code
-     * @param body Response body; null is returned as an empty string
-     * @return This mock
-     * @throws MockException when called before whenRequest()
+     * @param statusCode `Integer` HTTP status code
+     * @param body `String` Response body; null is returned as an empty string
+     * @return `CallwiseMock` This mock
+     * @throws `MockException` when called before whenRequest()
      */
     public CallwiseMock thenRespond(Integer statusCode, String body) {
         return thenRespond(statusCode, body, null);
     }
 
     /**
-     * Adds a response with headers to the current route's sequence.
+     * @description Adds a response with headers to the current route's sequence.
      *
-     * @param statusCode HTTP status code
-     * @param body Response body; null is returned as an empty string
-     * @param headers Response headers, may be null
-     * @return This mock
-     * @throws MockException when called before whenRequest() or statusCode is null
+     * @param statusCode `Integer` HTTP status code
+     * @param body `String` Response body; null is returned as an empty string
+     * @param headers `Map<String, String>` Response headers, may be null
+     * @return `CallwiseMock` This mock
+     * @throws `MockException` when called before whenRequest() or statusCode is null
      */
     public CallwiseMock thenRespond(Integer statusCode, String body, Map<String, String> headers) {
         if (statusCode == null) {
@@ -93,11 +99,11 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     }
 
     /**
-     * Adds a transport failure to the current route's sequence: the callout throws a CalloutException.
+     * @description Adds a transport failure to the current route's sequence: the callout throws a CalloutException.
      *
-     * @param message Exception message, e.g. 'Read timed out'
-     * @return This mock
-     * @throws MockException when called before whenRequest()
+     * @param message `String` Exception message, e.g. 'Read timed out'
+     * @return `CallwiseMock` This mock
+     * @throws `MockException` when called before whenRequest()
      */
     public CallwiseMock thenThrow(String message) {
         requireRoute().steps.add(new Step(null, null, null, message ?? 'Mocked callout failure'));
@@ -105,9 +111,9 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     }
 
     /**
-     * Registers this mock with Test.setMock(). Only valid in test context.
+     * @description Registers this mock with Test.setMock(). Only valid in test context.
      *
-     * @return This mock
+     * @return `CallwiseMock` This mock
      */
     public CallwiseMock install() {
         Test.setMock(HttpCalloutMock.class, this);
@@ -115,12 +121,12 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     }
 
     /**
-     * HttpCalloutMock implementation. Called by the platform for every callout.
+     * @description HttpCalloutMock implementation. Called by the platform for every callout.
      *
-     * @param request Outgoing request
-     * @return Mocked response
-     * @throws CalloutException when the matched step is a thenThrow()
-     * @throws MockException when no route matches or the route has no responses
+     * @param request `HttpRequest` Outgoing request
+     * @return `HttpResponse` Mocked response
+     * @throws `CalloutException` when the matched step is a thenThrow()
+     * @throws `MockException` when no route matches or the route has no responses
      */
     public HttpResponse respond(HttpRequest request) {
         receivedRequests.add(request);
@@ -141,16 +147,20 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
     }
 
     /**
-     * @return Every request received, in order
+     * @description Returns the requests received so far, for asserting headers and bodies.
+     *
+     * @return `List<HttpRequest>` Copy of every request received, in order
      */
     public List<HttpRequest> getRequests() {
         return new List<HttpRequest>(receivedRequests);
     }
 
     /**
-     * @param method HTTP method, case-insensitive, or '*' for any
-     * @param pathPattern Same syntax as whenRequest()
-     * @return Number of received requests matching method and pattern
+     * @description Counts the received requests that match a method and a path pattern.
+     *
+     * @param method `String` HTTP method, case-insensitive, or '*' for any; null means any
+     * @param pathPattern `String` Same syntax as whenRequest(); null means any
+     * @return `Integer` Number of received requests matching method and pattern
      */
     public Integer countRequests(String method, String pathPattern) {
         Route matcher = new Route(method ?? WILDCARD, pathPattern ?? WILDCARD);
@@ -163,6 +173,12 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         return count;
     }
 
+    /**
+     * @description Returns the route being configured.
+     *
+     * @return `Route` Route started by the last whenRequest()
+     * @throws `MockException` when whenRequest() has not been called
+     */
     private Route requireRoute() {
         if (currentRoute == null) {
             throw new MockException('Call whenRequest() before thenRespond() or thenThrow().');
@@ -170,6 +186,13 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         return currentRoute;
     }
 
+    /**
+     * @description Finds the first route that matches a request.
+     *
+     * @param method `String` HTTP method of the request
+     * @param pathAndQuery `String` Path and query string of the request
+     * @return `Route` Matching route, or null when none matches
+     */
     private Route findRoute(String method, String pathAndQuery) {
         for (Route route : routes) {
             if (route.matches(method, pathAndQuery)) {
@@ -179,6 +202,11 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         return null;
     }
 
+    /**
+     * @description Lists the registered routes, for the message of an unmatched request.
+     *
+     * @return `String` Routes as "METHOD pattern", comma-separated, or 'none'
+     */
     private String describeRoutes() {
         if (routes.isEmpty()) {
             return 'none';
@@ -190,6 +218,12 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         return String.join(descriptions, ', ');
     }
 
+    /**
+     * @description Removes the callout: prefix and the Named Credential name from an endpoint.
+     *
+     * @param endpoint `String` Endpoint of the request, e.g. 'callout:Stripe_API/v1/customers?limit=10'
+     * @return `String` Path and query string, always starting with '/'
+     */
     private static String extractPathAndQuery(String endpoint) {
         String remainder = endpoint ?? '';
         if (remainder.startsWithIgnoreCase(CALLOUT_PREFIX)) {
@@ -200,6 +234,14 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         return pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery;
     }
 
+    /**
+     * @description Finds the first occurrence of either of two substrings.
+     *
+     * @param value `String` Text to search
+     * @param first `String` First substring
+     * @param second `String` Second substring
+     * @return `Integer` Index of the earliest occurrence, or -1 when neither occurs
+     */
     private static Integer firstIndexOfAny(String value, String first, String second) {
         Integer firstIndex = value.indexOf(first);
         Integer secondIndex = value.indexOf(second);
@@ -209,14 +251,29 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         return secondIndex < 0 ? firstIndex : Math.min(firstIndex, secondIndex);
     }
 
+    /**
+     * @description A method and path pattern with the sequence of responses it plays.
+     */
     private class Route {
+        /** @description HTTP method in upper case, or '*' for any. */
         private final String method;
+        /** @description Path pattern as registered, with '*' wildcards. */
         private final String pathPattern;
+        /** @description True when the pattern contains '?', so the query string is matched too. */
         private final Boolean matchesQuery;
+        /** @description Pattern compiled to a regular expression. */
         private final Pattern compiledPattern;
+        /** @description Responses and failures to play, in order. */
         private final List<Step> steps = new List<Step>();
+        /** @description Index of the next step; the last step repeats once it is reached. */
         private Integer cursor = 0;
 
+        /**
+         * @description Creates a route and compiles its pattern.
+         *
+         * @param method `String` HTTP method, case-insensitive, or '*' for any
+         * @param pathPattern `String` Path pattern with '*' wildcards
+         */
         private Route(String method, String pathPattern) {
             this.method = method.toUpperCase();
             this.pathPattern = pathPattern;
@@ -224,6 +281,13 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
             this.compiledPattern = Pattern.compile(toRegex(pathPattern));
         }
 
+        /**
+         * @description Checks whether a request matches this route.
+         *
+         * @param requestMethod `String` HTTP method of the request
+         * @param pathAndQuery `String` Path and query string of the request
+         * @return `Boolean` True when method and pattern match
+         */
         private Boolean matches(String requestMethod, String pathAndQuery) {
             if (method != WILDCARD && !method.equalsIgnoreCase(requestMethod)) {
                 return false;
@@ -232,6 +296,12 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
             return compiledPattern.matcher(target).matches();
         }
 
+        /**
+         * @description Returns the next step and advances; the last step repeats.
+         *
+         * @return `Step` Step to play for this request
+         * @throws `MockException` when the route has no steps
+         */
         private Step nextStep() {
             if (steps.isEmpty()) {
                 throw new MockException(
@@ -243,6 +313,12 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
             return step;
         }
 
+        /**
+         * @description Converts a '*' wildcard pattern into a regular expression, quoting everything else.
+         *
+         * @param wildcardPattern `String` Pattern with '*' wildcards
+         * @return `String` Equivalent regular expression
+         */
         private String toRegex(String wildcardPattern) {
             List<String> quotedParts = new List<String>();
             for (String part : wildcardPattern.split('\\*', -1)) {
@@ -252,12 +328,27 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         }
     }
 
+    /**
+     * @description One response, or one transport failure, played by a route.
+     */
     private class Step {
+        /** @description Status code of the response; null for a failure. */
         private final Integer statusCode;
+        /** @description Body of the response. */
         private final String body;
+        /** @description Headers of the response. */
         private final Map<String, String> headers;
+        /** @description Message of the CalloutException to throw; null for a response. */
         private final String failureMessage;
 
+        /**
+         * @description Creates a response step, or a failure step when failureMessage is set.
+         *
+         * @param statusCode `Integer` Status code of the response
+         * @param body `String` Body of the response
+         * @param headers `Map<String, String>` Headers of the response; null means none
+         * @param failureMessage `String` Message of the CalloutException to throw, or null
+         */
         private Step(Integer statusCode, String body, Map<String, String> headers, String failureMessage) {
             this.statusCode = statusCode;
             this.body = body;
@@ -265,6 +356,12 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
             this.failureMessage = failureMessage;
         }
 
+        /**
+         * @description Plays the step.
+         *
+         * @return `HttpResponse` Response with status, reason phrase, body and headers
+         * @throws `CalloutException` when the step is a failure
+         */
         private HttpResponse toHttpResponse() {
             if (failureMessage != null) {
                 throw new CalloutException(failureMessage);

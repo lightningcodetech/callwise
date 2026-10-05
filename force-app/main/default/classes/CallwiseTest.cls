@@ -1,14 +1,17 @@
+/**
+ * @description Tests for the Callwise entry point: request creation, loggers and the cache partition setting.
+ */
 @IsTest
 private class CallwiseTest {
     @IsTest
-    static void shouldStartRequest_WhenTo() {
+    static void shouldStartRequestWhenTo() {
         CallwiseRequest request = Callwise.to('Test_API');
 
         Assert.areEqual('Test_API', request.getNamedCredential(), 'to() should start a request');
     }
 
     @IsTest
-    static void shouldUseNoOpLogger_ByDefault() {
+    static void shouldUseNoOpLoggerByDefault() {
         Assert.isInstanceOfType(Callwise.getLogger(), Callwise.NoOpLogger.class, 'Default logger is NoOpLogger');
     }
 
@@ -22,7 +25,7 @@ private class CallwiseTest {
     }
 
     @IsTest
-    static void shouldRestoreNoOpLogger_WhenSetToNull() {
+    static void shouldRestoreNoOpLoggerWhenSetToNull() {
         Callwise.setLogger(new Callwise.DebugLogger());
 
         Callwise.setLogger(null);
@@ -36,24 +39,24 @@ private class CallwiseTest {
     }
 
     @IsTest
-    static void shouldSetCachePartition_WhenQualified() {
+    static void shouldSetCachePartitionWhenQualified() {
         Callwise.setCachePartition('local.Integrations');
 
         Assert.areEqual('local.Integrations', Callwise.getCachePartition(), 'Partition should be replaced');
     }
 
     @IsTest
-    static void shouldRejectCachePartition_WhenUnqualified() {
+    static void shouldRejectCachePartitionWhenUnqualified() {
         assertInvalidPartition('Integrations');
     }
 
     @IsTest
-    static void shouldRejectCachePartition_WhenBlank() {
+    static void shouldRejectCachePartitionWhenBlank() {
         assertInvalidPartition('');
     }
 
     @IsTest
-    static void shouldIgnoreAttempt_WhenNoOpLogger() {
+    static void shouldIgnoreAttemptWhenNoOpLogger() {
         Callwise.NoOpLogger logger = new Callwise.NoOpLogger();
 
         logger.log(Callwise.to('Test_API').get('/a'), null, null, 1);
@@ -62,7 +65,7 @@ private class CallwiseTest {
     }
 
     @IsTest
-    static void shouldFormatResponse_WithoutBodies() {
+    static void shouldFormatResponseWithoutBodies() {
         Callwise.DebugLogger logger = new Callwise.DebugLogger(LoggingLevel.INFO);
 
         String line = logger.format(request(), response(), null, 2);
@@ -88,7 +91,7 @@ private class CallwiseTest {
     }
 
     @IsTest
-    static void shouldIncludeBodies_WhenRequested() {
+    static void shouldIncludeBodiesWhenRequested() {
         Callwise.DebugLogger logger = new Callwise.DebugLogger(null).includeBodies();
 
         String line = logger.format(request(), response(), null, 1);
@@ -97,7 +100,7 @@ private class CallwiseTest {
     }
 
     @IsTest
-    static void shouldWriteDebugLine_WhenLogging() {
+    static void shouldWriteDebugLineWhenLogging() {
         Callwise.DebugLogger logger = new Callwise.DebugLogger();
 
         logger.log(request(), response(), null, 1);

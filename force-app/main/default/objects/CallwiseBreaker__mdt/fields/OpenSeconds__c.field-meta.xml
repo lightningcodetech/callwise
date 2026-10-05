@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Open_Seconds__c</fullName>
+    <fullName>OpenSeconds__c</fullName>
     <description
     >Seconds the circuit stays open before a trial request, from 1 to 3600. Blank or out of range: 60.</description>
     <externalId>false</externalId>

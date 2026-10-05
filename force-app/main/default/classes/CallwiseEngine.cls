@@ -1,5 +1,6 @@
 /**
- * Internal: executes CallwiseRequests. Not part of the public API; call CallwiseRequest.send() / sendAsync().
+ * @description Internal: executes CallwiseRequests. Not part of the public API; call CallwiseRequest.send() /
+ * sendAsync().
  *
  * Synchronous sends retry immediately (Apex cannot sleep) while the retry policy allows it and the next attempt
  * fits in the transaction's limits: one callout from the 100 available, and the request's timeout within what
@@ -8,41 +9,46 @@
  * breaker of its Named Credential.
  */
 public inherited sharing class CallwiseEngine {
-    /** Cumulative callout time the platform allows per transaction, in milliseconds. */
+    /** @description Cumulative callout time the platform allows per transaction, in milliseconds. */
     public static final Integer MAX_CALLOUT_TIME_MS = 120000;
 
+    /** @description Text of the platform error raised when a callout follows uncommitted DML. */
     private static final String UNCOMMITTED_WORK_MARKER = 'uncommitted work pending';
+    /** @description Text of the platform error raised when a callout times out. */
     private static final String TIMEOUT_MARKER = 'timed out';
 
     /**
-     * Callout time consumed by Callwise in this transaction. The platform does not expose the cumulative callout
+     * @description Callout time consumed by Callwise in this transaction. The platform does not expose the cumulative
+     * callout
      * time, so callouts made outside Callwise are not counted.
      */
     @TestVisible
     private static Long calloutMsUsed = 0;
 
-    /** Replaces Limits.getLimitCallouts() in tests, so the callout budget can be exhausted cheaply. */
+    /** @description Replaces Limits.getLimitCallouts() in tests, so the callout budget can be exhausted cheaply. */
     @TestVisible
     private static Integer calloutLimitOverride;
 
-    /** Replaces Limits.getLimitQueueableJobs() in tests. */
+    /** @description Replaces Limits.getLimitQueueableJobs() in tests. */
     @TestVisible
     private static Integer queueableLimitOverride;
 
     /**
-     * Result of a single attempt: exactly one of response and failure is set.
+     * @description Result of a single attempt: exactly one of response and failure is set.
      */
     public class Outcome {
+        /** @description Response of the attempt, or null when it failed. */
         public CallwiseResponse response;
+        /** @description Failure of the attempt, or null when a response was received. */
         public CallwiseException failure;
     }
 
     /**
-     * Sends the request synchronously, retrying while the policy and the limits budget allow it.
+     * @description Sends the request synchronously, retrying while the policy and the limits budget allow it.
      *
-     * @param request Request to send
-     * @return Final response
-     * @throws CallwiseException CIRCUIT_OPEN when the breaker rejects the first attempt, LIMIT_BUDGET when no callout
+     * @param request `CallwiseRequest` Request to send
+     * @return `CallwiseResponse` Final response
+     * @throws `CallwiseException` CIRCUIT_OPEN when the breaker rejects the first attempt, LIMIT_BUDGET when no callout
      *         is left for it, the last failure when every permitted attempt failed, or HTTP_ERROR when throwOnError()
      *         is set
      */
@@ -86,12 +92,12 @@ public inherited sharing class CallwiseEngine {
     }
 
     /**
-     * Enqueues the request for asynchronous delivery. Each attempt runs in its own CallwiseAsyncJob.
+     * @description Enqueues the request for asynchronous delivery. Each attempt runs in its own CallwiseAsyncJob.
      *
-     * @param request Request to send
-     * @param callbackClassName Name of a Callwise.Callback implementation, or null for no callback
-     * @return Id of the enqueued job
-     * @throws CallwiseException INVALID_REQUEST when request is null, LIMIT_BUDGET when no Queueable job can be added
+     * @param request `CallwiseRequest` Request to send
+     * @param callbackClassName `String` Name of a Callwise.Callback implementation, or null for no callback
+     * @return `Id` Id of the enqueued job
+     * @throws `CallwiseException` INVALID_REQUEST when request is null, LIMIT_BUDGET when no Queueable job can be added
      *         in this transaction
      */
     public Id sendAsync(CallwiseRequest request, String callbackClassName) {
@@ -111,13 +117,13 @@ public inherited sharing class CallwiseEngine {
     }
 
     /**
-     * Makes one attempt: one callout, recorded in the breaker (when given) and logged.
+     * @description Makes one attempt: one callout, recorded in the breaker (when given) and logged.
      *
-     * @param request Request to send
-     * @param breaker Breaker of the request's Named Credential, or null when it is bypassed
-     * @param attempt Attempt number, starting at 1
-     * @param startedAt When the first attempt of this send started, for CallwiseResponse.getElapsedMs()
-     * @return Response or failure of the attempt
+     * @param request `CallwiseRequest` Request to send
+     * @param breaker `CallwiseCircuitBreaker` Breaker of the request's Named Credential, or null when it is bypassed
+     * @param attempt `Integer` Attempt number, starting at 1
+     * @param startedAt `Long` When the first attempt of this send started, for CallwiseResponse.getElapsedMs()
+     * @return `Outcome` Response or failure of the attempt
      */
     public static Outcome attempt(
         CallwiseRequest request,
@@ -141,17 +147,19 @@ public inherited sharing class CallwiseEngine {
     }
 
     /**
-     * @return True when another Queueable job can be enqueued in this transaction
+     * @description Checks the Queueable limit of the transaction: 50 from synchronous code, 1 from a Queueable.
+     *
+     * @return `Boolean` True when another Queueable job can be enqueued in this transaction
      */
     public static Boolean hasQueueableLeft() {
         return Limits.getQueueableJobs() < (queueableLimitOverride ?? Limits.getLimitQueueableJobs());
     }
 
     /**
-     * Maps a platform CalloutException to a CallwiseException reason, preserving the cause.
+     * @description Maps a platform CalloutException to a CallwiseException reason, preserving the cause.
      *
-     * @param calloutError Exception thrown by Http.send()
-     * @return Translated exception
+     * @param calloutError `CalloutException` Exception thrown by Http.send()
+     * @return `CallwiseException` Translated exception
      */
     public static CallwiseException translate(CalloutException calloutError) {
         String message = calloutError.getMessage() ?? '';
@@ -169,6 +177,17 @@ public inherited sharing class CallwiseEngine {
         return CallwiseException.create(CallwiseException.FailureReason.TRANSPORT, message, calloutError);
     }
 
+    /**
+     * @description Decides whether a synchronous send makes another attempt: the policy allows it, the server did not
+     * ask to wait (Retry-After greater than 0), and the attempt fits in the transaction: one callout left and the
+     * request timeout within the remaining callout time.
+     *
+     * @param request `CallwiseRequest` Request being sent
+     * @param response `CallwiseResponse` Response of the last attempt, or null
+     * @param failure `CallwiseException` Failure of the last attempt, or null
+     * @param attempt `Integer` Number of the last attempt
+     * @return `Boolean` True when another attempt should be made now
+     */
     private static Boolean shouldRetry(
         CallwiseRequest request,
         CallwiseResponse response,
@@ -187,6 +206,11 @@ public inherited sharing class CallwiseEngine {
         return hasCalloutLeft() && calloutMsUsed + request.getTimeoutMs() <= MAX_CALLOUT_TIME_MS;
     }
 
+    /**
+     * @description Checks the callout limit of the transaction.
+     *
+     * @return `Boolean` True when another callout can be made
+     */
     private static Boolean hasCalloutLeft() {
         return Limits.getCallouts() < (calloutLimitOverride ?? Limits.getLimitCallouts());
     }

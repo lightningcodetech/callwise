@@ -1,11 +1,12 @@
 /**
- * Internal: circuit breaker per Named Credential. Not part of the public API; the engine uses it for every request
+ * @description Internal: circuit breaker per Named Credential. Not part of the public API; the engine uses it for
+ * every request
  * unless the request calls withoutCircuitBreaker().
  *
  * CLOSED → OPEN after a number of consecutive failures. OPEN rejects requests for a while, then HALF_OPEN lets one
  * trial request through: success closes the circuit, failure opens it again.
  *
- * Both values come from the Callwise_Breaker__mdt record named after the Named Credential. Without a record, or for a
+ * Both values come from the CallwiseBreaker__mdt record named after the Named Credential. Without a record, or for a
  * blank or out-of-range field, the defaults apply: FAILURE_THRESHOLD failures and OPEN_DURATION_MS.
  *
  * State lives in the org Platform Cache partition returned by Callwise.getCachePartition(). When the partition is
@@ -15,48 +16,61 @@
  * Best effort: Platform Cache has no atomic compare-and-set, so concurrent transactions can race on the counter.
  */
 public inherited sharing class CallwiseCircuitBreaker {
-    /** Default consecutive failures that open the circuit. */
+    /** @description Default consecutive failures that open the circuit. */
     public static final Integer FAILURE_THRESHOLD = 5;
-    /** Default time the circuit stays open before a trial request is allowed, in milliseconds. */
+    /** @description Default time the circuit stays open before a trial request is allowed, in milliseconds. */
     public static final Integer OPEN_DURATION_MS = 60000;
-    /** Largest Failure_Threshold__c accepted. */
+    /** @description Largest FailureThreshold__c accepted. */
     public static final Integer MAX_FAILURE_THRESHOLD = 100;
-    /** Largest Open_Seconds__c accepted; well below the cache TTL, so open state never expires early. */
+    /** @description Largest OpenSeconds__c accepted; well below the cache TTL, so open state never expires early. */
     public static final Integer MAX_OPEN_SECONDS = 3600;
 
-    /** Cache entries outlive any open period; expiry only resets an idle breaker to CLOSED. */
+    /** @description Cache entries outlive any open period; expiry only resets an idle breaker to CLOSED. */
     private static final Integer CACHE_TTL_SECONDS = 86400;
+    /** @description Prefix of every cache key written by the breaker. */
     private static final String KEY_PREFIX = 'cwcb';
 
-    /** Replaces the clock in tests. */
+    /** @description Replaces the clock in tests. */
     @TestVisible
     private static Long nowOverride;
 
-    /** Replaces the store in tests. */
+    /** @description Replaces the store in tests. */
     @TestVisible
     private static Store storeOverride;
 
-    /** Replaces Callwise_Breaker__mdt records in tests, keyed by Named Credential. */
+    /** @description Replaces CallwiseBreaker__mdt records in tests, keyed by Named Credential. */
     @TestVisible
-    private static Map<String, Callwise_Breaker__mdt> settingsOverride;
+    private static Map<String, CallwiseBreaker__mdt> settingsOverride;
 
-    /** Lets tests exercise the Platform Cache path; by default tests use the transaction store for isolation. */
+    /**
+     * @description Lets tests exercise the Platform Cache path; by default tests use the transaction store for
+     * isolation.
+     */
     @TestVisible
     private static Boolean usePlatformCacheInTests = false;
 
+    /** @description Store shared by every breaker of the transaction; also the fallback when the cache is unusable. */
     private static final TransactionStore TRANSACTION_STORE = new TransactionStore();
+    /** @description Platform Cache store resolved for resolvedPartition, reused for the rest of the transaction. */
     private static Store resolvedStore;
+    /** @description Partition name resolvedStore was created for. */
     private static String resolvedPartition;
+    /** @description True once the cache warning has been written in this transaction. */
     @TestVisible
     private static Boolean warned = false;
 
+    /** @description API name of the Named Credential this breaker protects. */
     private final String namedCredential;
+    /** @description Alphanumeric cache key derived from the Named Credential name. */
     private final String key;
+    /** @description Consecutive failures that open this circuit. */
     private final Integer failureThreshold;
+    /** @description Time this circuit stays open before a trial request, in milliseconds. */
     private final Long openDurationMs;
 
     /**
-     * Breaker state values.
+     * @description Breaker state values: CLOSED lets requests through, OPEN rejects them, HALF_OPEN lets one trial
+     * through.
      */
     public enum CircuitStatus {
         CLOSED,
@@ -65,63 +79,78 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * Serializable breaker state, as stored in the cache.
+     * @description Serializable breaker state, as stored in the cache.
      */
     public class State {
+        /** @description Current status. */
         public CircuitStatus status = CircuitStatus.CLOSED;
+        /** @description Failures recorded since the last success. */
         public Integer consecutiveFailures = 0;
+        /** @description When the circuit opened, in epoch milliseconds; null unless OPEN. */
         public Long openedAt;
+        /** @description When the current trial started, in epoch milliseconds; null unless HALF_OPEN. */
         public Long trialStartedAt;
     }
 
     /**
-     * Where breaker state is kept.
+     * @description Where breaker state is kept.
      */
     public interface Store {
         /**
-         * @param key Alphanumeric key
-         * @return Stored state, or null when absent or expired
+         * @description Reads the state of a breaker.
+         *
+         * @param key `String` Alphanumeric key
+         * @return `State` Stored state, or null when absent or expired
          */
         State get(String key);
 
         /**
-         * @param key Alphanumeric key
-         * @param state State to store
+         * @description Writes the state of a breaker.
+         *
+         * @param key `String` Alphanumeric key
+         * @param state `State` State to store
          */
         void put(String key, State state);
     }
 
     /**
-     * @param namedCredential API name of the Named Credential the breaker protects
+     * @description Creates the breaker of a Named Credential and reads its CallwiseBreaker__mdt settings.
+     *
+     * @param namedCredential `String` API name of the Named Credential the breaker protects
      */
     public CallwiseCircuitBreaker(String namedCredential) {
         this.namedCredential = namedCredential;
         // Cache keys must be alphanumeric; Named Credential names may contain underscores.
         this.key = KEY_PREFIX + EncodingUtil.convertToHex(Crypto.generateDigest('MD5', Blob.valueOf(namedCredential)));
-        Callwise_Breaker__mdt settings = settingsFor(namedCredential);
-        this.failureThreshold = inRange(settings?.Failure_Threshold__c, MAX_FAILURE_THRESHOLD) ?? FAILURE_THRESHOLD;
-        Integer openSeconds = inRange(settings?.Open_Seconds__c, MAX_OPEN_SECONDS);
+        CallwiseBreaker__mdt settings = settingsFor(namedCredential);
+        this.failureThreshold = inRange(settings?.FailureThreshold__c, MAX_FAILURE_THRESHOLD) ?? FAILURE_THRESHOLD;
+        Integer openSeconds = inRange(settings?.OpenSeconds__c, MAX_OPEN_SECONDS);
         this.openDurationMs = openSeconds == null ? OPEN_DURATION_MS : openSeconds * 1000L;
     }
 
     /**
-     * @return Consecutive failures that open this circuit
+     * @description Returns the consecutive failures that open this circuit.
+     *
+     * @return `Integer` FailureThreshold__c of the settings record, or FAILURE_THRESHOLD
      */
     public Integer getFailureThreshold() {
         return failureThreshold;
     }
 
     /**
-     * @return Time this circuit stays open before a trial request, in milliseconds
+     * @description Returns the time this circuit stays open before a trial request.
+     *
+     * @return `Long` OpenSeconds__c of the settings record in milliseconds, or OPEN_DURATION_MS
      */
     public Long getOpenDurationMs() {
         return openDurationMs;
     }
 
     /**
-     * Decides whether a request may be sent now. Moves an expired OPEN circuit to HALF_OPEN and claims the trial.
+     * @description Decides whether a request may be sent now. Moves an expired OPEN circuit to HALF_OPEN and claims
+     * the trial.
      *
-     * @return True when the request may be sent
+     * @return `Boolean` True when the request may be sent
      */
     public Boolean allowRequest() {
         State state = load();
@@ -143,12 +172,13 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * Records the outcome of an attempt. Only endpoint health counts: transport failures, timeouts and 5xx, 408 and
+     * @description Records the outcome of an attempt. Only endpoint health counts: transport failures, timeouts and
+     * 5xx, 408 and
      * 429 responses are failures; any other response is a success. Other failures (uncommitted work, limits) are
      * not recorded.
      *
-     * @param response Response of the attempt, or null
-     * @param failure Exception raised by the attempt, or null
+     * @param response `CallwiseResponse` Response of the attempt, or null
+     * @param failure `CallwiseException` Exception raised by the attempt, or null
      */
     public void record(CallwiseResponse response, CallwiseException failure) {
         if (failure != null) {
@@ -172,14 +202,18 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * @return Current status, for diagnostics and tests
+     * @description Returns the current status of the circuit, for diagnostics and tests.
+     *
+     * @return `CircuitStatus` CLOSED, OPEN or HALF_OPEN
      */
     public CircuitStatus getStatus() {
         return load().status;
     }
 
     /**
-     * @return Seconds until an open circuit lets a trial request through; 0 when it is not open
+     * @description Returns how long an open circuit still rejects requests.
+     *
+     * @return `Long` Seconds until a trial request is let through, rounded up; 0 when the circuit is not open
      */
     public Long secondsUntilTrial() {
         State state = load();
@@ -191,7 +225,9 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * @return Exception thrown when the circuit rejects a request
+     * @description Builds the exception thrown when the circuit rejects a request.
+     *
+     * @return `CallwiseException` CIRCUIT_OPEN failure naming the Named Credential and the wait until the next trial
      */
     public CallwiseException openCircuitException() {
         return CallwiseException.create(
@@ -204,6 +240,9 @@ public inherited sharing class CallwiseCircuitBreaker {
         );
     }
 
+    /**
+     * @description Closes the circuit and resets the failure count. Skips the write when nothing changes.
+     */
     private void recordSuccess() {
         State state = load();
         if (state.status == CircuitStatus.CLOSED && state.consecutiveFailures == 0) {
@@ -212,6 +251,9 @@ public inherited sharing class CallwiseCircuitBreaker {
         save(new State());
     }
 
+    /**
+     * @description Counts a failure and opens the circuit when the threshold is reached or the trial failed.
+     */
     private void recordFailure() {
         State state = load();
         state.consecutiveFailures++;
@@ -223,23 +265,43 @@ public inherited sharing class CallwiseCircuitBreaker {
         save(state);
     }
 
+    /**
+     * @description Reads the state of this breaker.
+     *
+     * @return `State` Stored state, or a new CLOSED state when none is stored
+     */
     private State load() {
         return store().get(key) ?? new State();
     }
 
+    /**
+     * @description Writes the state of this breaker.
+     *
+     * @param state `State` State to store
+     */
     private void save(State state) {
         store().put(key, state);
     }
 
-    private static Callwise_Breaker__mdt settingsFor(String namedCredential) {
+    /**
+     * @description Reads the settings record of a Named Credential. getInstance() does not count against SOQL limits.
+     *
+     * @param namedCredential `String` API name of the Named Credential
+     * @return `CallwiseBreaker__mdt` Settings record, or null when there is none
+     */
+    private static CallwiseBreaker__mdt settingsFor(String namedCredential) {
         if (settingsOverride != null) {
             return settingsOverride.get(namedCredential);
         }
-        return Callwise_Breaker__mdt.getInstance(namedCredential);
+        return CallwiseBreaker__mdt.getInstance(namedCredential);
     }
 
     /**
-     * @return The value as an Integer when it is a whole number between 1 and max, otherwise null
+     * @description Validates a numeric setting.
+     *
+     * @param value `Decimal` Field value, possibly null
+     * @param max `Integer` Largest accepted value
+     * @return `Integer` The value when it is a whole number between 1 and max, otherwise null
      */
     private static Integer inRange(Decimal value, Integer max) {
         if (value == null || value < 1 || value > max || value.scale() > 0 && value != value.round()) {
@@ -248,10 +310,21 @@ public inherited sharing class CallwiseCircuitBreaker {
         return value.intValue();
     }
 
+    /**
+     * @description Returns the current time, or nowOverride in tests.
+     *
+     * @return `Long` Epoch milliseconds
+     */
     private static Long now() {
         return nowOverride ?? System.currentTimeMillis();
     }
 
+    /**
+     * @description Returns the store for breaker state: the test override, the transaction store in tests, or the
+     * Platform Cache store of the current partition, created once per partition and transaction.
+     *
+     * @return `Store` Store to use
+     */
     private static Store store() {
         if (storeOverride != null) {
             return storeOverride;
@@ -267,6 +340,12 @@ public inherited sharing class CallwiseCircuitBreaker {
         return resolvedStore;
     }
 
+    /**
+     * @description Writes a WARN debug line, once per transaction, when the cache partition cannot be used.
+     *
+     * @param partitionName `String` Partition that failed
+     * @param cause `Exception` Error raised by Platform Cache
+     */
     @SuppressWarnings('PMD.AvoidDebugStatements')
     private static void warnCacheUnavailable(String partitionName, Exception cause) {
         if (warned) {
@@ -284,15 +363,24 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * Keeps state in an org cache partition. Falls back to the transaction store for the rest of the transaction
+     * @description Keeps state in an org cache partition. Falls back to the transaction store for the rest of the
+     * transaction
      * as soon as the partition cannot be read or written.
      */
     @TestVisible
     private class PlatformCacheStore implements Store {
+        /** @description Qualified partition name, e.g. local.Callwise. */
         private final String partitionName;
+        /** @description Resolved partition; null when it could not be resolved. */
         private Cache.OrgPartition partition;
+        /** @description True once the partition failed; from then on the transaction store is used. */
         private Boolean unavailable = false;
 
+        /**
+         * @description Resolves the partition. A missing partition marks the store as unavailable.
+         *
+         * @param partitionName `String` Qualified partition name
+         */
         private PlatformCacheStore(String partitionName) {
             this.partitionName = partitionName;
             try {
@@ -302,6 +390,12 @@ public inherited sharing class CallwiseCircuitBreaker {
             }
         }
 
+        /**
+         * @description Reads from the partition, or from the transaction store when the partition is unavailable.
+         *
+         * @param key `String` Alphanumeric key
+         * @return `State` Stored state, or null when absent or expired
+         */
         public State get(String key) {
             if (!unavailable) {
                 try {
@@ -313,6 +407,14 @@ public inherited sharing class CallwiseCircuitBreaker {
             return TRANSACTION_STORE.get(key);
         }
 
+        /**
+         * @description Writes to the partition with CACHE_TTL_SECONDS, or to the transaction store when the partition
+         * is
+         * unavailable.
+         *
+         * @param key `String` Alphanumeric key
+         * @param state `State` State to store
+         */
         public void put(String key, State state) {
             if (!unavailable) {
                 try {
@@ -325,6 +427,11 @@ public inherited sharing class CallwiseCircuitBreaker {
             TRANSACTION_STORE.put(key, state);
         }
 
+        /**
+         * @description Switches to the transaction store for the rest of the transaction and warns once.
+         *
+         * @param e `Exception` Error raised by Platform Cache
+         */
         private void markUnavailable(Exception e) {
             unavailable = true;
             warnCacheUnavailable(partitionName, e);
@@ -332,16 +439,29 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * Keeps state in a static map: shared by every breaker in the transaction, gone when it ends.
+     * @description Keeps state in a static map: shared by every breaker in the transaction, gone when it ends.
      */
     @TestVisible
     private class TransactionStore implements Store {
+        /** @description State per cache key. */
         private final Map<String, State> states = new Map<String, State>();
 
+        /**
+         * @description Reads the state kept in this transaction.
+         *
+         * @param key `String` Alphanumeric key
+         * @return `State` Stored state, or null when absent
+         */
         public State get(String key) {
             return states.get(key);
         }
 
+        /**
+         * @description Keeps the state for the rest of the transaction.
+         *
+         * @param key `String` Alphanumeric key
+         * @param state `State` State to store
+         */
         public void put(String key, State state) {
             states.put(key, state);
         }
