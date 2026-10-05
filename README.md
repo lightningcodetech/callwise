@@ -64,9 +64,10 @@ Or deploy the source directly: `sf project deploy start --source-dir force-app -
 1. **Named Credential.** Callwise only calls Named Credentials, never raw URLs. Create the External Credential and
    Named Credential for your API in Setup, and grant the External Credential principal to the users (or the
    integration user) through a permission set.
-2. **Platform Cache (optional, recommended).** Create an org cache partition named `Callwise` with a few KB of
-   capacity to share circuit breaker state across transactions. Without it, the breaker only lives for the current
-   transaction. Use another partition with `Callwise.setCachePartition('local.MyPartition')`.
+2. **Platform Cache (optional, recommended).** Create an org cache partition named `Callwise` with 1 MB of org cache
+   (the minimum partition size) to share circuit breaker state across transactions. Without it, the breaker only
+   lives for the current transaction. Use another partition with `Callwise.setCachePartition('local.MyPartition')`.
+   See [Platform Cache capacity](docs/API.md#platform-cache-capacity) for what each edition includes.
 3. **Circuit breaker settings (optional).** By default a Named Credential's circuit opens after 5 consecutive failures
    for 60 s. To change that, add a `Callwise Breaker` custom metadata record named after the Named Credential, with
    `FailureThreshold__c` and `OpenSeconds__c`.

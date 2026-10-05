@@ -188,8 +188,15 @@ transaction. A cache problem never opens the circuit.
 **Best effort:** Platform Cache has no atomic compare-and-set, so concurrent transactions can race on the counter.
 The breaker reduces load on a failing endpoint; it does not guarantee an exact threshold.
 
-Create the partition in Setup → Platform Cache with a few KB of org cache. Developer Edition orgs include a small
-free allocation.
+### Platform Cache capacity
+
+Create the partition in Setup → Platform Cache with 1 MB of org cache, the minimum partition size. Callwise stores one
+small entry per Named Credential (status, failure count and two timestamps), so 1 MB is more than enough.
+
+According to the [Platform Cache limits](https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_platform_cache_limits.htm),
+Enterprise Edition includes 10 MB of cache, Unlimited and Performance Edition 30 MB, and all other editions 0 MB.
+The capacity actually available is shown in Setup → Platform Cache. In practice, a Developer Edition org allowed a
+1 MB org partition, and the breaker state was shared across transactions.
 
 ## Testing
 
