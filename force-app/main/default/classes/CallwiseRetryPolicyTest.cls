@@ -1,7 +1,7 @@
 /**
  * @description Tests for CallwiseRetryPolicy: factories, validation, retry decisions and async backoff delays.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseRetryPolicyTest {
     private static final Set<Integer> TRANSIENT_CODES = new Set<Integer>{ 408, 429, 500, 502, 503, 504 };
 

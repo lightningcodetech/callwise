@@ -2,7 +2,7 @@
  * @description Tests for CallwiseCircuitBreaker: state transitions, failure classification, per-credential state,
  * CallwiseBreaker__mdt settings and the Platform Cache fallback.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseCircuitBreakerTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
     private static final Long T0 = 1700000000000L;

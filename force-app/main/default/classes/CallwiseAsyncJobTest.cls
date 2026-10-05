@@ -2,8 +2,10 @@
  * @description Tests for sendAsync() and CallwiseAsyncJob: enqueueing, backoff between attempts, Retry-After,
  * idempotency keys across jobs, the circuit breaker, Queueable limits and the callback contract. Apex does not allow
  * chaining Queueables in tests, so each attempt is run directly.
+ *
+ * Not parallel: tests call sendAsync(), which runs System.enqueueJob(), and parallel tests cannot enqueue jobs.
  */
-@IsTest
+@IsTest(IsParallel=false)
 public class CallwiseAsyncJobTest {
     private static final String NAMED_CREDENTIAL = 'Test_API';
     private static final String CALLBACK = RecordingCallback.class.getName();

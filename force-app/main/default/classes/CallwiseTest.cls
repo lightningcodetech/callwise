@@ -1,7 +1,7 @@
 /**
  * @description Tests for the Callwise entry point: request creation, loggers and the cache partition setting.
  */
-@IsTest
+@IsTest(IsParallel=true)
 private class CallwiseTest {
     @IsTest
     static void shouldStartRequestWhenTo() {
