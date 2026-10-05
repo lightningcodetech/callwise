@@ -40,6 +40,21 @@ public class CallwiseRequestTest {
     }
 
     @IsTest
+    static void shouldExplainInvalidNamedCredential() {
+        try {
+            Callwise.to('https://api.example.com');
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(
+                'Expected the API name of a Named Credential (e.g. Stripe_API), got "https://api.example.com". ' +
+                'Raw URLs are not supported.',
+                e.getMessage(),
+                'Exact message'
+            );
+        }
+    }
+
+    @IsTest
     static void shouldSetMethodForEachVerb() {
         Map<String, CallwiseRequest> requestsByMethod = new Map<String, CallwiseRequest>{
             'GET' => Callwise.to(NAMED_CREDENTIAL).get('/r'),

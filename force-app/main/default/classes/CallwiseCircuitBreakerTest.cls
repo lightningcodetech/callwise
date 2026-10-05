@@ -184,7 +184,20 @@ private class CallwiseCircuitBreakerTest {
 
         Assert.areEqual(CallwiseException.FailureReason.CIRCUIT_OPEN, failure.reason, 'Reason should be CIRCUIT_OPEN');
         Assert.isTrue(failure.getMessage().contains(NAMED_CREDENTIAL), 'Message names the credential');
-        Assert.isTrue(failure.getMessage().contains('60 s'), 'Message gives the wait: ' + failure.getMessage());
+        Assert.areEqual(
+            'Circuit open for Test_API after repeated failures; no callout was made. Next trial in about 60 s.',
+            failure.getMessage(),
+            'Exact message'
+        );
+    }
+
+    @IsTest
+    static void shouldWriteLongWaitsWithoutThousandsSeparator() {
+        configure(NAMED_CREDENTIAL, null, CallwiseCircuitBreaker.MAX_OPEN_SECONDS);
+
+        CallwiseException failure = openBreaker().openCircuitException();
+
+        Assert.isTrue(failure.getMessage().endsWith('Next trial in about 3600 s.'), 'Got: ' + failure.getMessage());
     }
 
     @IsTest

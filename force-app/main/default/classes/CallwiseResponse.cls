@@ -1,7 +1,7 @@
 /**
  * @description Serializable snapshot of an HTTP response. HttpResponse cannot be serialized, so Callwise copies status,
- * body and headers into this class; that lets async jobs carry responses in their state.
- * Header names are stored in lower case and looked up case-insensitively.
+ * body and headers into this class; that lets async jobs carry responses in their state. Header names are stored in
+ * lower case and looked up case-insensitively.
  *
  * @example
  * CallwiseResponse res = Callwise.to('Stripe_API').get('/v1/customers/cus_123').send();
@@ -57,10 +57,7 @@ public inherited sharing class CallwiseResponse {
      */
     public CallwiseResponse(HttpResponse response, Integer attempts, Long elapsedMs) {
         if (response == null) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.INVALID_REQUEST,
-                'Cannot build a CallwiseResponse from a null HttpResponse.'
-            );
+            throw CallwiseException.invalidRequest('Cannot build a CallwiseResponse from a null HttpResponse.');
         }
         this.statusCode = response.getStatusCode();
         this.status = response.getStatus();
@@ -141,8 +138,7 @@ public inherited sharing class CallwiseResponse {
 
     /**
      * @description Parses the Retry-After header, in either form allowed by RFC 9110: delay-seconds (Retry-After: 120)
-     * or an
-     * HTTP date in IMF-fixdate format (Retry-After: Wed, 21 Oct 2026 07:28:00 GMT).
+     * or an HTTP date in IMF-fixdate format (Retry-After: Wed, 21 Oct 2026 07:28:00 GMT).
      *
      * @return `Long` Seconds to wait (0 for a date in the past), or null when the header is absent or cannot be parsed
      */
@@ -159,8 +155,8 @@ public inherited sharing class CallwiseResponse {
     }
 
     /**
-     * @description Parses an IMF-fixdate and returns the time until it. Dates that do not exist (31 February, hour
-     * 24) are rejected: Datetime would roll them over silently.
+     * @description Parses an IMF-fixdate and returns the time until it. Dates that do not exist (31 February, hour 24)
+     * are rejected: Datetime would roll them over silently.
      *
      * @param httpDate `String` Date such as 'Wed, 21 Oct 2026 07:28:00 GMT'
      * @return `Long` Seconds until the date, rounded up; 0 when it has passed; null when it cannot be parsed
@@ -189,7 +185,7 @@ public inherited sharing class CallwiseResponse {
             return null;
         }
         Long remainingMs = instant.getTime() - (nowOverride ?? System.currentTimeMillis());
-        return remainingMs <= 0 ? 0 : (remainingMs + 999) / 1000;
+        return remainingMs <= 0 ? 0 : Math.ceil((Double) remainingMs / 1000).longValue();
     }
 
     /**
@@ -229,10 +225,7 @@ public inherited sharing class CallwiseResponse {
      */
     public Object deserialize(Type targetType) {
         if (targetType == null) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.INVALID_REQUEST,
-                'deserialize() requires a target type.'
-            );
+            throw CallwiseException.invalidRequest('deserialize() requires a target type.');
         }
         return String.isBlank(body) ? null : JSON.deserialize(body, targetType);
     }

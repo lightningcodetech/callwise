@@ -2,11 +2,11 @@
  * @description Internal: executes CallwiseRequests. Not part of the public API; call CallwiseRequest.send() /
  * sendAsync().
  *
- * Synchronous sends retry immediately (Apex cannot sleep) while the retry policy allows it and the next attempt
- * fits in the transaction's limits: one callout from the 100 available, and the request's timeout within what
- * remains of the 120 s cumulative callout time. Asynchronous sends run one attempt per CallwiseAsyncJob and wait
- * between attempts by re-enqueueing with a delay. Unless the request opts out, every attempt goes through the circuit
- * breaker of its Named Credential.
+ * Synchronous sends retry immediately (Apex cannot sleep) while the retry policy allows it and the next attempt fits in
+ * the transaction's limits: one callout from the 100 available, and the request's timeout within what remains of the
+ * 120 s cumulative callout time. Asynchronous sends run one attempt per CallwiseAsyncJob and wait between attempts by
+ * re-enqueueing with a delay. Unless the request opts out, every attempt goes through the circuit breaker of its Named
+ * Credential.
  */
 public inherited sharing class CallwiseEngine {
     /** @description Cumulative callout time the platform allows per transaction, in milliseconds. */
@@ -19,8 +19,7 @@ public inherited sharing class CallwiseEngine {
 
     /**
      * @description Callout time consumed by Callwise in this transaction. The platform does not expose the cumulative
-     * callout
-     * time, so callouts made outside Callwise are not counted.
+     * callout time, so callouts made outside Callwise are not counted.
      */
     @TestVisible
     private static Long calloutMsUsed = 0;
@@ -49,25 +48,16 @@ public inherited sharing class CallwiseEngine {
      * @param request `CallwiseRequest` Request to send
      * @return `CallwiseResponse` Final response
      * @throws `CallwiseException` CIRCUIT_OPEN when the breaker rejects the first attempt, LIMIT_BUDGET when no callout
-     *         is left for it, the last failure when every permitted attempt failed, or HTTP_ERROR when throwOnError()
-     *         is set
+     * is left for it, the last failure when every permitted attempt failed, or HTTP_ERROR when throwOnError() is set
      */
     public CallwiseResponse send(CallwiseRequest request) {
-        if (request == null) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.INVALID_REQUEST,
-                'Request must not be null.'
-            );
-        }
-        CallwiseCircuitBreaker breaker = request.isCircuitBreakerEnabled()
-            ? new CallwiseCircuitBreaker(request.getNamedCredential())
-            : null;
+        requireRequest(request);
+        CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(request);
         if (breaker != null && !breaker.allowRequest()) {
             throw breaker.openCircuitException();
         }
         if (!hasCalloutLeft()) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.LIMIT_BUDGET,
+            throw limitBudget(
                 'No callouts left in this transaction (' + Limits.getCallouts() + ' used). Use sendAsync().'
             );
         }
@@ -98,18 +88,12 @@ public inherited sharing class CallwiseEngine {
      * @param callbackClassName `String` Name of a Callwise.Callback implementation, or null for no callback
      * @return `Id` Id of the enqueued job
      * @throws `CallwiseException` INVALID_REQUEST when request is null, LIMIT_BUDGET when no Queueable job can be added
-     *         in this transaction
+     * in this transaction
      */
     public Id sendAsync(CallwiseRequest request, String callbackClassName) {
-        if (request == null) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.INVALID_REQUEST,
-                'Request must not be null.'
-            );
-        }
+        requireRequest(request);
         if (!hasQueueableLeft()) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.LIMIT_BUDGET,
+            throw limitBudget(
                 'No Queueable jobs left in this transaction (' + Limits.getQueueableJobs() + ' enqueued).'
             );
         }
@@ -213,5 +197,27 @@ public inherited sharing class CallwiseEngine {
      */
     private static Boolean hasCalloutLeft() {
         return Limits.getCallouts() < (calloutLimitOverride ?? Limits.getLimitCallouts());
+    }
+
+    /**
+     * @description Rejects a null request.
+     *
+     * @param request `CallwiseRequest` Request to check
+     * @throws `CallwiseException` INVALID_REQUEST when request is null
+     */
+    private static void requireRequest(CallwiseRequest request) {
+        if (request == null) {
+            throw CallwiseException.invalidRequest('Request must not be null.');
+        }
+    }
+
+    /**
+     * @description Builds a LIMIT_BUDGET exception.
+     *
+     * @param message `String` Which limit is exhausted
+     * @return `CallwiseException` Exception, ready to throw
+     */
+    private static CallwiseException limitBudget(String message) {
+        return CallwiseException.create(CallwiseException.FailureReason.LIMIT_BUDGET, message);
     }
 }

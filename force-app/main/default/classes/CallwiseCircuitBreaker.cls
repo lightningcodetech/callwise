@@ -1,7 +1,6 @@
 /**
- * @description Internal: circuit breaker per Named Credential. Not part of the public API; the engine uses it for
- * every request
- * unless the request calls withoutCircuitBreaker().
+ * @description Internal: circuit breaker per Named Credential. Not part of the public API; the engine uses it for every
+ * request unless the request calls withoutCircuitBreaker().
  *
  * CLOSED → OPEN after a number of consecutive failures. OPEN rejects requests for a while, then HALF_OPEN lets one
  * trial request through: success closes the circuit, failure opens it again.
@@ -29,6 +28,8 @@ public inherited sharing class CallwiseCircuitBreaker {
     private static final Integer CACHE_TTL_SECONDS = 86400;
     /** @description Prefix of every cache key written by the breaker. */
     private static final String KEY_PREFIX = 'cwcb';
+    /** @description Statuses below 500 that also mean the endpoint is struggling: 408 and 429. */
+    private static final Set<Integer> FAILURE_STATUS_CODES = new Set<Integer>{ 408, 429 };
 
     /** @description Replaces the clock in tests. */
     @TestVisible
@@ -129,6 +130,16 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
+     * @description Returns the breaker of a request's Named Credential, unless the request opts out.
+     *
+     * @param request `CallwiseRequest` Request about to be sent
+     * @return `CallwiseCircuitBreaker` Breaker of the Named Credential, or null when withoutCircuitBreaker() was called
+     */
+    public static CallwiseCircuitBreaker forRequest(CallwiseRequest request) {
+        return request.isCircuitBreakerEnabled() ? new CallwiseCircuitBreaker(request.getNamedCredential()) : null;
+    }
+
+    /**
      * @description Returns the consecutive failures that open this circuit.
      *
      * @return `Integer` FailureThreshold__c of the settings record, or FAILURE_THRESHOLD
@@ -147,8 +158,8 @@ public inherited sharing class CallwiseCircuitBreaker {
     }
 
     /**
-     * @description Decides whether a request may be sent now. Moves an expired OPEN circuit to HALF_OPEN and claims
-     * the trial.
+     * @description Decides whether a request may be sent now. Moves an expired OPEN circuit to HALF_OPEN and claims the
+     * trial.
      *
      * @return `Boolean` True when the request may be sent
      */
@@ -158,11 +169,10 @@ public inherited sharing class CallwiseCircuitBreaker {
         if (state.status == CircuitStatus.CLOSED) {
             return true;
         }
-        if (state.status == CircuitStatus.OPEN && now - state.openedAt < openDurationMs) {
-            return false;
-        }
-        // A trial that never reported back (its transaction failed) is replaced after the same wait.
-        if (state.status == CircuitStatus.HALF_OPEN && now - state.trialStartedAt < openDurationMs) {
+        // OPEN waits from the moment it opened; HALF_OPEN waits from the trial, so a trial that never reported back
+        // (its transaction failed) is replaced after the same wait.
+        Long since = state.status == CircuitStatus.OPEN ? state.openedAt : state.trialStartedAt;
+        if (now - since < openDurationMs) {
             return false;
         }
         state.status = CircuitStatus.HALF_OPEN;
@@ -173,19 +183,15 @@ public inherited sharing class CallwiseCircuitBreaker {
 
     /**
      * @description Records the outcome of an attempt. Only endpoint health counts: transport failures, timeouts and
-     * 5xx, 408 and
-     * 429 responses are failures; any other response is a success. Other failures (uncommitted work, limits) are
-     * not recorded.
+     * 5xx, 408 and 429 responses are failures; any other response is a success. Other failures (uncommitted work,
+     * limits) are not recorded.
      *
      * @param response `CallwiseResponse` Response of the attempt, or null
      * @param failure `CallwiseException` Exception raised by the attempt, or null
      */
     public void record(CallwiseResponse response, CallwiseException failure) {
         if (failure != null) {
-            if (
-                failure.reason == CallwiseException.FailureReason.TRANSPORT ||
-                failure.reason == CallwiseException.FailureReason.TIMEOUT
-            ) {
+            if (failure.isTransportFailure()) {
                 recordFailure();
             }
             return;
@@ -194,7 +200,7 @@ public inherited sharing class CallwiseCircuitBreaker {
             return;
         }
         Integer statusCode = response.getStatusCode();
-        if (statusCode >= 500 || statusCode == 408 || statusCode == 429) {
+        if (statusCode >= 500 || FAILURE_STATUS_CODES.contains(statusCode)) {
             recordFailure();
         } else {
             recordSuccess();
@@ -221,7 +227,7 @@ public inherited sharing class CallwiseCircuitBreaker {
             return 0;
         }
         Long remainingMs = Math.max(0, openDurationMs - (now() - state.openedAt));
-        return (remainingMs + 999) / 1000;
+        return Math.ceil((Double) remainingMs / 1000).longValue();
     }
 
     /**
@@ -232,11 +238,10 @@ public inherited sharing class CallwiseCircuitBreaker {
     public CallwiseException openCircuitException() {
         return CallwiseException.create(
             CallwiseException.FailureReason.CIRCUIT_OPEN,
-            'Circuit open for ' +
-                namedCredential +
-                ' after repeated failures; no callout was made. Next trial in about ' +
-                secondsUntilTrial() +
-                ' s.'
+            String.format(
+                'Circuit open for {0} after repeated failures; no callout was made. Next trial in about {1} s.',
+                new List<Object>{ namedCredential, String.valueOf(secondsUntilTrial()) }
+            )
         );
     }
 
@@ -304,7 +309,7 @@ public inherited sharing class CallwiseCircuitBreaker {
      * @return `Integer` The value when it is a whole number between 1 and max, otherwise null
      */
     private static Integer inRange(Decimal value, Integer max) {
-        if (value == null || value < 1 || value > max || value.scale() > 0 && value != value.round()) {
+        if (value == null || value < 1 || value > max || value != value.round()) {
             return null;
         }
         return value.intValue();
@@ -354,18 +359,17 @@ public inherited sharing class CallwiseCircuitBreaker {
         warned = true;
         System.debug(
             LoggingLevel.WARN,
-            '[Callwise] Platform Cache partition ' +
-                partitionName +
-                ' is not usable (' +
-                cause.getMessage() +
-                '). Circuit breaker state only lives for this transaction.'
+            String.format(
+                '[Callwise] Platform Cache partition {0} is not usable ({1}). ' +
+                'Circuit breaker state only lives for this transaction.',
+                new List<Object>{ partitionName, cause.getMessage() }
+            )
         );
     }
 
     /**
      * @description Keeps state in an org cache partition. Falls back to the transaction store for the rest of the
-     * transaction
-     * as soon as the partition cannot be read or written.
+     * transaction as soon as the partition cannot be read or written.
      */
     @TestVisible
     private class PlatformCacheStore implements Store {
@@ -409,8 +413,7 @@ public inherited sharing class CallwiseCircuitBreaker {
 
         /**
          * @description Writes to the partition with CACHE_TTL_SECONDS, or to the transaction store when the partition
-         * is
-         * unavailable.
+         * is unavailable.
          *
          * @param key `String` Alphanumeric key
          * @param state `State` State to store

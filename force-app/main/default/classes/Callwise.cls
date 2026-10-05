@@ -38,15 +38,13 @@ public inherited sharing class Callwise {
     }
 
     /**
-     * @description Receives the outcome of sendAsync(). Implementations need a public no-argument constructor. They
-     * run in the
-     * Queueable's transaction, so they may perform DML.
+     * @description Receives the outcome of sendAsync(). Implementations need a public no-argument constructor. They run
+     * in the Queueable's transaction, so they may perform DML.
      */
     public interface Callback {
         /**
          * @description Called with the final response, whatever its status, unless the request used throwOnError() and
-         * the
-         * status was not 2xx (then onFailure() is called with reason HTTP_ERROR).
+         * the status was not 2xx (then onFailure() is called with reason HTTP_ERROR).
          *
          * @param request `CallwiseRequest` Request that was sent
          * @param response `CallwiseResponse` Final response
@@ -106,8 +104,7 @@ public inherited sharing class Callwise {
      */
     public static void setCachePartition(String partitionName) {
         if (String.isBlank(partitionName) || !CACHE_PARTITION_NAME.matcher(partitionName).matches()) {
-            throw CallwiseException.create(
-                CallwiseException.FailureReason.INVALID_REQUEST,
+            throw CallwiseException.invalidRequest(
                 'Expected a qualified cache partition name such as local.Callwise, got "' + partitionName + '".'
             );
         }
@@ -147,8 +144,7 @@ public inherited sharing class Callwise {
 
     /**
      * @description Writes one System.debug line per attempt: method, endpoint, attempt, status or failure, elapsed
-     * time.
-     * Bodies are excluded unless includeBodies() is called.
+     * time. Bodies are excluded unless includeBodies() is called.
      *
      * @example
      * Callwise.setLogger(new Callwise.DebugLogger(LoggingLevel.INFO).includeBodies());
@@ -177,8 +173,7 @@ public inherited sharing class Callwise {
 
         /**
          * @description Also logs request and response bodies. Bodies often contain PII: do not enable in production
-         * orgs
-         * unless that is acceptable.
+         * orgs unless that is acceptable.
          *
          * @return `DebugLogger` This logger
          */

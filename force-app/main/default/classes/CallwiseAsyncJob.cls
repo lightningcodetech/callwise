@@ -1,15 +1,14 @@
 /**
  * @description Internal: runs one attempt of an asynchronous send and, when the outcome can be retried, enqueues the
- * next attempt
- * with a delay. Not part of the public API; use CallwiseRequest.sendAsync().
+ * next attempt with a delay. Not part of the public API; use CallwiseRequest.sendAsync().
  *
  * Every job is its own transaction with fresh limits. The request travels in the job state, including its
  * Idempotency-Key, so every attempt sends the same key. Callwise.setLogger() and setCachePartition() do not travel:
  * static state does not cross transactions.
  *
- * Delay before the next attempt: CallwiseRetryPolicy.asyncDelayMinutes() (Retry-After, otherwise exponential
- * backoff), at most 10 minutes. When the circuit is open no callout is made, so the attempt is retried whatever the
- * HTTP method, no earlier than the breaker's next trial.
+ * Delay before the next attempt: CallwiseRetryPolicy.asyncDelayMinutes() (Retry-After, otherwise exponential backoff),
+ * at most 10 minutes. When the circuit is open no callout is made, so the attempt is retried whatever the HTTP method,
+ * no earlier than the breaker's next trial.
  */
 public inherited sharing class CallwiseAsyncJob implements Queueable, Database.AllowsCallouts {
     /** @description Seconds in a minute, to convert the breaker's wait into an enqueue delay. */
@@ -52,9 +51,7 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
      */
     public void execute(QueueableContext context) {
         CallwiseRetryPolicy policy = request.getRetryPolicy();
-        CallwiseCircuitBreaker breaker = request.isCircuitBreakerEnabled()
-            ? new CallwiseCircuitBreaker(request.getNamedCredential())
-            : null;
+        CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(request);
         CallwiseEngine.Outcome outcome;
         Boolean retryable;
         Integer nextDelayMinutes;
@@ -122,6 +119,6 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
      * @return `Integer` Minutes to wait
      */
     private static Integer minutesUntil(Long seconds) {
-        return ((seconds + SECONDS_PER_MINUTE - 1) / SECONDS_PER_MINUTE).intValue();
+        return Math.ceil((Double) seconds / SECONDS_PER_MINUTE).intValue();
     }
 }

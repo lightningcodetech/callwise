@@ -1,7 +1,7 @@
 /**
  * @description Declarative HttpCalloutMock for tests. Routes match on HTTP method and path; '*' matches any sequence of
- * characters. Patterns containing '?' are matched against path + query string, others against the path only.
- * Routes are evaluated in registration order and the first match wins.
+ * characters. Patterns containing '?' are matched against path + query string, others against the path only. Routes are
+ * evaluated in registration order and the first match wins.
  *
  * Each route answers with a sequence of responses; once exhausted, the last one repeats.
  *
@@ -135,12 +135,10 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
         Route route = findRoute(method, pathAndQuery);
         if (route == null) {
             throw new MockException(
-                'No CallwiseMock route matches ' +
-                    method +
-                    ' ' +
-                    pathAndQuery +
-                    '. Registered routes: ' +
-                    describeRoutes()
+                String.format(
+                    'No CallwiseMock route matches {0} {1}. Registered routes: {2}',
+                    new List<Object>{ method, pathAndQuery, describeRoutes() }
+                )
             );
         }
         return route.nextStep().toHttpResponse();
@@ -225,30 +223,10 @@ public inherited sharing class CallwiseMock implements HttpCalloutMock {
      * @return `String` Path and query string, always starting with '/'
      */
     private static String extractPathAndQuery(String endpoint) {
-        String remainder = endpoint ?? '';
-        if (remainder.startsWithIgnoreCase(CALLOUT_PREFIX)) {
-            remainder = remainder.substring(CALLOUT_PREFIX.length());
-        }
-        Integer start = firstIndexOfAny(remainder, '/', '?');
+        String remainder = (endpoint ?? '').removeStartIgnoreCase(CALLOUT_PREFIX);
+        Integer start = remainder.indexOfAny('/?');
         String pathAndQuery = start < 0 ? '' : remainder.substring(start);
         return pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery;
-    }
-
-    /**
-     * @description Finds the first occurrence of either of two substrings.
-     *
-     * @param value `String` Text to search
-     * @param first `String` First substring
-     * @param second `String` Second substring
-     * @return `Integer` Index of the earliest occurrence, or -1 when neither occurs
-     */
-    private static Integer firstIndexOfAny(String value, String first, String second) {
-        Integer firstIndex = value.indexOf(first);
-        Integer secondIndex = value.indexOf(second);
-        if (firstIndex < 0) {
-            return secondIndex;
-        }
-        return secondIndex < 0 ? firstIndex : Math.min(firstIndex, secondIndex);
     }
 
     /**

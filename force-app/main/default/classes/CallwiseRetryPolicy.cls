@@ -1,11 +1,11 @@
 /**
  * @description Decides whether a failed attempt is retried and, for async sends, how long to wait before the next one.
  *
- * Retries are idempotency-aware: GET, HEAD, PUT and DELETE are retried; POST and PATCH only when the request
- * carries an Idempotency-Key header or the policy calls allowNonIdempotent().
+ * Retries are idempotency-aware: GET, HEAD, PUT and DELETE are retried; POST and PATCH only when the request carries an
+ * Idempotency-Key header or the policy calls allowNonIdempotent().
  *
- * Synchronous retries are immediate (Apex cannot sleep) and bounded by the transaction's callout budget.
- * Real backoff only exists in sendAsync(), where the next attempt is re-enqueued with a delay.
+ * Synchronous retries are immediate (Apex cannot sleep) and bounded by the transaction's callout budget. Real backoff
+ * only exists in sendAsync(), where the next attempt is re-enqueued with a delay.
  *
  * @example
  * CallwiseRetryPolicy policy = CallwiseRetryPolicy.transientErrors().maxAttempts(5).asyncBaseDelay(2);
@@ -72,7 +72,9 @@ public inherited sharing class CallwiseRetryPolicy {
      */
     public CallwiseRetryPolicy maxAttempts(Integer attempts) {
         if (attempts == null || attempts < 1 || attempts > MAX_ATTEMPTS_LIMIT) {
-            throw invalid('maxAttempts must be between 1 and ' + MAX_ATTEMPTS_LIMIT + ', got ' + attempts + '.');
+            throw CallwiseException.invalidRequest(
+                'maxAttempts must be between 1 and ' + MAX_ATTEMPTS_LIMIT + ', got ' + attempts + '.'
+            );
         }
         attemptLimit = attempts;
         return this;
@@ -87,7 +89,7 @@ public inherited sharing class CallwiseRetryPolicy {
      */
     public CallwiseRetryPolicy retryOn(Set<Integer> statusCodes) {
         if (statusCodes == null) {
-            throw invalid('retryOn() requires a non-null set of status codes.');
+            throw CallwiseException.invalidRequest('retryOn() requires a non-null set of status codes.');
         }
         retryableStatusCodes = statusCodes.clone();
         return this;
@@ -95,8 +97,7 @@ public inherited sharing class CallwiseRetryPolicy {
 
     /**
      * @description Allows retrying POST and PATCH without an Idempotency-Key header. Only use it when the endpoint is
-     * known
-     * to be safe to repeat: a retried POST after a timeout can create duplicates.
+     * known to be safe to repeat: a retried POST after a timeout can create duplicates.
      *
      * @return `CallwiseRetryPolicy` This policy
      */
@@ -115,7 +116,9 @@ public inherited sharing class CallwiseRetryPolicy {
      */
     public CallwiseRetryPolicy asyncBaseDelay(Integer minutes) {
         if (minutes == null || minutes < 0 || minutes > MAX_ASYNC_DELAY_MINUTES) {
-            throw invalid('asyncBaseDelay must be between 0 and ' + MAX_ASYNC_DELAY_MINUTES + ', got ' + minutes + '.');
+            throw CallwiseException.invalidRequest(
+                'asyncBaseDelay must be between 0 and ' + MAX_ASYNC_DELAY_MINUTES + ', got ' + minutes + '.'
+            );
         }
         asyncBaseDelayMinutes = minutes;
         return this;
@@ -168,8 +171,7 @@ public inherited sharing class CallwiseRetryPolicy {
 
     /**
      * @description Internal: whether the outcome of an attempt qualifies for a retry. Does not consider attempt count
-     * or
-     * limits budget; the engine checks those.
+     * or limits budget; the engine checks those.
      *
      * @param request `CallwiseRequest` The request that was sent
      * @param response `CallwiseResponse` Response received, or null when the attempt failed with an exception
@@ -181,16 +183,14 @@ public inherited sharing class CallwiseRetryPolicy {
             return false;
         }
         if (failure != null) {
-            return retryTransportErrors &&
-                (failure.reason == CallwiseException.FailureReason.TRANSPORT ||
-                failure.reason == CallwiseException.FailureReason.TIMEOUT);
+            return retryTransportErrors && failure.isTransportFailure();
         }
         return response != null && retryableStatusCodes.contains(response.getStatusCode());
     }
 
     /**
-     * @description Internal: delay before the next async attempt. A numeric Retry-After header wins over exponential
-     * backoff.
+     * @description Internal: delay before the next async attempt. A Retry-After header, in seconds or as an HTTP date,
+     * wins over exponential backoff: base * 2^(attempt - 1) minutes.
      *
      * @param attempt `Integer` Number of the attempt that just failed, starting at 1
      * @param response `CallwiseResponse` Response of that attempt, or null when it failed with an exception
@@ -199,24 +199,11 @@ public inherited sharing class CallwiseRetryPolicy {
     public Integer asyncDelayMinutes(Integer attempt, CallwiseResponse response) {
         Long retryAfterSeconds = response?.getRetryAfterSeconds();
         if (retryAfterSeconds != null) {
-            Long minutes = (retryAfterSeconds + SECONDS_PER_MINUTE - 1) / SECONDS_PER_MINUTE;
-            return Math.min(minutes, (Long) MAX_ASYNC_DELAY_MINUTES).intValue();
+            return Math.min(Math.ceil((Double) retryAfterSeconds / SECONDS_PER_MINUTE), MAX_ASYNC_DELAY_MINUTES)
+                .intValue();
         }
-        Integer delay = asyncBaseDelayMinutes;
-        // Doubling with an early exit avoids overflow for large attempt numbers.
-        for (Integer i = 1; i < (attempt ?? 1) && delay < MAX_ASYNC_DELAY_MINUTES; i++) {
-            delay *= 2;
-        }
-        return Math.min(delay, MAX_ASYNC_DELAY_MINUTES);
-    }
-
-    /**
-     * @description Builds an INVALID_REQUEST exception.
-     *
-     * @param message `String` Description of the invalid argument
-     * @return `CallwiseException` Exception, ready to throw
-     */
-    private static CallwiseException invalid(String message) {
-        return CallwiseException.create(CallwiseException.FailureReason.INVALID_REQUEST, message);
+        // Attempts up to 1 wait the base delay. Double arithmetic cannot overflow for large attempt numbers.
+        Integer doublings = Math.max((attempt ?? 1) - 1, 0);
+        return Math.min(asyncBaseDelayMinutes * Math.pow(2, doublings), MAX_ASYNC_DELAY_MINUTES).intValue();
     }
 }

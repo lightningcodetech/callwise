@@ -110,7 +110,8 @@ Serializable copy of `HttpResponse` (which is not serializable), so async jobs c
 | `UNCOMMITTED_WORK` | DML earlier in the transaction                  | No; use `sendAsync()`   |
 | `HTTP_ERROR`       | Non-2xx with `throwOnError()`                   | n/a                     |
 
-Factories: `create(reason, message)`, `create(reason, message, cause)`, `fromResponse(response)`.
+Factories: `create(reason, message)`, `create(reason, message, cause)`, `invalidRequest(message)`,
+`fromResponse(response)`. `isTransportFailure()` is true for `TRANSPORT` and `TIMEOUT`.
 
 ### `CallwiseMock`
 
