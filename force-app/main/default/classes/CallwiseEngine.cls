@@ -107,7 +107,7 @@ public inherited sharing class CallwiseEngine {
                 'No Queueable jobs left in this transaction (' + Limits.getQueueableJobs() + ' enqueued).'
             );
         }
-        return System.enqueueJob(new CallwiseAsyncJob(request, callbackClassName, 1));
+        return new CallwiseAsyncJob(request, callbackClassName, 1).submit();
     }
 
     /**

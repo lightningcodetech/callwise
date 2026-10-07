@@ -5,6 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- `sendAsync()` jobs now use the logger and cache partition in effect when the request was sent. Before, they used
+  `local.Callwise` and no logger, so with another partition the breaker state of async attempts only lived for one
+  transaction, and async attempts were never logged. A logger that cannot be serialized as Queueable state is left
+  out, with a `WARN` line in the debug log.
+
 ## [0.2.0] - 2026-10-05
 
 ### Added

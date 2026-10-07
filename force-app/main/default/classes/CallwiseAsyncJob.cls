@@ -3,8 +3,9 @@
  * next attempt with a delay. Not part of the public API; use CallwiseRequest.sendAsync().
  *
  * Every job is its own transaction with fresh limits. The request travels in the job state, including its
- * Idempotency-Key, so every attempt sends the same key. Callwise.setLogger() and setCachePartition() do not travel:
- * static state does not cross transactions.
+ * Idempotency-Key, so every attempt sends the same key. The logger and cache partition in effect when the request was
+ * sent also travel in the job state and are restored before each attempt, since static state does not cross
+ * transactions. A logger that cannot be serialized is left behind: see submit().
  *
  * Delay before the next attempt: CallwiseRetryPolicy.asyncDelayMinutes() (Retry-After, otherwise exponential backoff),
  * at most 10 minutes. When the circuit is open no callout is made, so the attempt is retried whatever the HTTP method,
@@ -27,12 +28,18 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
     /** @description Attempt this job makes, starting at 1. */
     @TestVisible
     private final Integer attempt;
+    /** @description Platform Cache partition in effect when the job was created; restored in execute(). */
+    @TestVisible
+    private final String cachePartition;
+    /** @description Logger in effect when the job was created, or null when it could not be serialized. */
+    @TestVisible
+    private Callwise.Logger logger;
     /** @description Minutes this job waits before running, as passed to System.enqueueJob(). */
     @TestVisible
     private Integer delayMinutes;
 
     /**
-     * @description Creates the job for one attempt.
+     * @description Creates the job for one attempt, capturing the current logger and cache partition.
      *
      * @param request `CallwiseRequest` Request to send
      * @param callbackClassName `String` Name of a Callwise.Callback implementation, or null for no callback
@@ -42,14 +49,50 @@ public inherited sharing class CallwiseAsyncJob implements Queueable, Database.A
         this.request = request;
         this.callbackClassName = callbackClassName;
         this.attempt = attempt;
+        this.cachePartition = Callwise.getCachePartition();
+        this.logger = Callwise.getLogger();
     }
 
     /**
-     * @description Makes the attempt, then either enqueues the next one or reports the final outcome to the callback.
+     * @description Enqueues this job as the first attempt. When the logger cannot be serialized as job state,
+     * System.enqueueJob() throws and still uses up a Queueable job; the job is then enqueued again without the logger
+     * and a warning is written to the debug log. Next attempts are enqueued from execute() with the logger that was
+     * serialized successfully.
+     *
+     * @return `Id` Id of the enqueued job
+     * @throws `CallwiseException` LIMIT_BUDGET when the failed attempt used up the last Queueable job
+     */
+    @SuppressWarnings('PMD.AvoidDebugStatements')
+    public Id submit() {
+        try {
+            return System.enqueueJob(this);
+        } catch (SerializationException e) {
+            System.debug(
+                LoggingLevel.WARN,
+                '[Callwise] The logger cannot travel to async jobs (' +
+                    e.getMessage() +
+                    '). The attempts of this request are not logged.'
+            );
+            this.logger = null;
+        }
+        if (!new CallwiseEngine().hasQueueableLeft()) {
+            throw CallwiseException.create(
+                CallwiseException.FailureReason.LIMIT_BUDGET,
+                'No Queueable jobs left in this transaction after the logger failed to serialize.'
+            );
+        }
+        return System.enqueueJob(this);
+    }
+
+    /**
+     * @description Restores the logger and cache partition, makes the attempt, then either enqueues the next one or
+     * reports the final outcome to the callback.
      *
      * @param context `QueueableContext` Queueable context; not used
      */
     public void execute(QueueableContext context) {
+        Callwise.setCachePartition(this.cachePartition);
+        Callwise.setLogger(this.logger);
         CallwiseRetryPolicy policy = this.request.getRetryPolicy();
         CallwiseEngine engine = new CallwiseEngine();
         CallwiseCircuitBreaker breaker = CallwiseCircuitBreaker.forRequest(this.request);

@@ -43,8 +43,8 @@ if (res.isSuccess()) {
 | Member                                              | Description                                                                                                           |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `to(String namedCredential)`                        | Starts a `CallwiseRequest`. The name is the Named Credential API name, without `callout:`.                            |
-| `setLogger(Logger)` / `getLogger()`                 | Transaction-wide logger. `null` restores `NoOpLogger`. Static state does not travel to async jobs.                    |
-| `setCachePartition(String)` / `getCachePartition()` | Org cache partition for breaker state. Default `local.Callwise`.                                                      |
+| `setLogger(Logger)` / `getLogger()`                 | Transaction-wide logger. `null` restores `NoOpLogger`. Travels to `sendAsync()` jobs if serializable.                 |
+| `setCachePartition(String)` / `getCachePartition()` | Org cache partition for breaker state. Default `local.Callwise`. Travels to `sendAsync()` jobs.                       |
 | `interface Logger`                                  | `log(request, response, failure, attempt)`. Called once per attempt. Must not throw.                                  |
 | `interface Callback`                                | `onResponse(request, response)` / `onFailure(request, failure)` for `sendAsync()`. Needs a public no-arg constructor. |
 | `NoOpLogger`                                        | Default. Does nothing.                                                                                                |
@@ -151,7 +151,10 @@ The callback (`sendAsync(Type)`) receives only the final outcome, in the transac
 - `onFailure(request, failure)` when the last attempt failed (`TRANSPORT`, `TIMEOUT`, `CIRCUIT_OPEN`…), or with
   `HTTP_ERROR` when the request used `throwOnError()` and the final status is not 2xx.
 
-Static settings (`Callwise.setLogger()`, `setCachePartition()`) do not travel to the jobs. An exception thrown by the
+The logger and cache partition in effect when `sendAsync()` is called travel to every job of the request. The logger
+travels as Queueable state, so it must be serializable: a logger holding, for example, an `HttpRequest` cannot be
+serialized. In that case the request is sent without it, the attempts are not logged, and a `WARN` line is written to
+the debug log. The failed serialization uses up one Queueable job of the transaction. An exception thrown by the
 callback fails that job; it is visible in Setup → Apex Jobs.
 
 ## Circuit breaker
