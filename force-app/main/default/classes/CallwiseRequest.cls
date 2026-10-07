@@ -299,7 +299,8 @@ public inherited sharing class CallwiseRequest {
      * callback.
      *
      * @return `Id` Id of the enqueued job
-     * @throws `CallwiseException` INVALID_REQUEST when the request is incomplete
+     * @throws `CallwiseException` INVALID_REQUEST when the request is incomplete, LIMIT_BUDGET when no Queueable job
+     * is left in this transaction
      */
     public Id sendAsync() {
         this.requireMethod();
@@ -313,7 +314,7 @@ public inherited sharing class CallwiseRequest {
      * @param callbackType `Type` Class implementing Callwise.Callback with a public no-argument constructor
      * @return `Id` Id of the enqueued job
      * @throws `CallwiseException` INVALID_REQUEST when the request is incomplete or callbackType is not a valid
-     * callback
+     * callback, LIMIT_BUDGET when no Queueable job is left in this transaction
      */
     public Id sendAsync(Type callbackType) {
         this.requireMethod();

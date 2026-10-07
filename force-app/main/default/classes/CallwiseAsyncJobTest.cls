@@ -1,6 +1,7 @@
 /**
  * @description Tests for sendAsync() and CallwiseAsyncJob: enqueueing, backoff between attempts, Retry-After,
- * idempotency keys across jobs, the circuit breaker, Queueable limits and the callback contract. Apex does not allow
+ * idempotency keys across jobs, the circuit breaker, Queueable limits, the logger and cache partition carried to
+ * every job, and the callback contract. Apex does not allow
  * chaining Queueables in tests, so each attempt is run directly.
  *
  * Not parallel: tests call sendAsync(), which runs System.enqueueJob(), and parallel tests cannot enqueue jobs.
@@ -12,6 +13,7 @@ public class CallwiseAsyncJobTest {
 
     private static List<CallwiseResponse> responses = new List<CallwiseResponse>();
     private static List<CallwiseException> failures = new List<CallwiseException>();
+    private static List<Integer> loggedAttempts = new List<Integer>();
 
     @IsTest
     static void shouldEnqueueJobAndDeliverResponse() {
@@ -232,9 +234,67 @@ public class CallwiseAsyncJobTest {
         }
     }
 
+    @IsTest
+    static void shouldRestoreLoggerAndCachePartitionInEveryAttempt() {
+        new CallwiseMock().whenRequest('GET', '/a').thenRespond(503, '').thenRespond(200, '').install();
+        Callwise.setLogger(new RecordingLogger());
+        Callwise.setCachePartition('local.Other');
+        CallwiseAsyncJob job = new CallwiseAsyncJob(Callwise.to(NAMED_CREDENTIAL).get('/a'), CALLBACK, 1);
+
+        Test.startTest();
+        resetStaticSettings();
+        job.execute(null);
+        CallwiseAsyncJob next = takeChained();
+        resetStaticSettings();
+        next.execute(null);
+        Test.stopTest();
+
+        Assert.areEqual('local.Other', next.cachePartition, 'The next attempt carries the partition');
+        Assert.areEqual('local.Other', Callwise.getCachePartition(), 'The job restores the partition');
+        Assert.areEqual(new List<Integer>{ 1, 2 }, loggedAttempts, 'Both attempts are logged');
+    }
+
+    @IsTest
+    static void shouldSendWithoutLoggerWhenLoggerCannotBeSerialized() {
+        CallwiseMock mock = new CallwiseMock().whenRequest('GET', '/a').thenRespond(200, '').install();
+        Callwise.setLogger(new UnserializableLogger());
+
+        Test.startTest();
+        Id jobId = Callwise.to(NAMED_CREDENTIAL).get('/a').sendAsync(RecordingCallback.class);
+        Integer queueableJobsUsed = Limits.getQueueableJobs();
+        Test.stopTest();
+
+        Assert.isNotNull(jobId, 'The job is enqueued without the logger');
+        Assert.areEqual(2, queueableJobsUsed, 'The failed serialization uses up one Queueable job');
+        Assert.areEqual(1, mock.countRequests('GET', '/a'), 'The job made the callout');
+        Assert.areEqual(200, responses[0].getStatusCode(), 'Callback received the response');
+        Assert.isTrue(loggedAttempts.isEmpty(), 'The attempt is not logged');
+    }
+
+    @IsTest
+    static void shouldThrowLimitBudgetWhenFailedSerializationUsesLastQueueable() {
+        Callwise.setLogger(new UnserializableLogger());
+        CallwiseEngine.queueableLimitOverride = Limits.getQueueableJobs() + 1;
+
+        try {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').sendAsync();
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(CallwiseException.FailureReason.LIMIT_BUDGET, e.reason, 'Reason should be LIMIT_BUDGET');
+        }
+    }
+
     private static CallwiseAsyncJob takeChained() {
         Assert.areEqual(1, CallwiseAsyncJob.chainedInTests.size(), 'Exactly one next attempt is enqueued');
         return CallwiseAsyncJob.chainedInTests.remove(0);
+    }
+
+    /**
+     * @description Puts the static settings back to their defaults, as in the new transaction a job runs in.
+     */
+    private static void resetStaticSettings() {
+        Callwise.setLogger(null);
+        Callwise.setCachePartition(Callwise.DEFAULT_CACHE_PARTITION);
     }
 
     private static void openCircuit() {
@@ -255,5 +315,26 @@ public class CallwiseAsyncJobTest {
         public void onFailure(CallwiseRequest request, CallwiseException failure) {
             failures.add(failure);
         }
+    }
+
+    /**
+     * @description Logger that records the attempt numbers in the test class.
+     */
+    public virtual class RecordingLogger implements Callwise.Logger {
+        public void log(
+            CallwiseRequest request,
+            CallwiseResponse response,
+            CallwiseException failure,
+            Integer attempt
+        ) {
+            loggedAttempts.add(attempt);
+        }
+    }
+
+    /**
+     * @description Recording logger that cannot be serialized as Queueable state, because it holds an HttpRequest.
+     */
+    public class UnserializableLogger extends RecordingLogger {
+        public final HttpRequest unserializable = new HttpRequest();
     }
 }

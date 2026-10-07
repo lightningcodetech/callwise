@@ -40,7 +40,8 @@ public inherited sharing class Callwise {
     }
 
     /**
-     * @description Sets the logger for the rest of the transaction. Static state does not travel to async jobs.
+     * @description Sets the logger for the rest of the transaction. sendAsync() carries the logger to its jobs, so it
+     * must be serializable as Queueable state; otherwise the async attempts are not logged.
      *
      * @param logger `Logger` Logger to use; null restores the NoOpLogger
      */
@@ -58,7 +59,8 @@ public inherited sharing class Callwise {
     }
 
     /**
-     * @description Sets the org Platform Cache partition used to store circuit breaker state.
+     * @description Sets the org Platform Cache partition used to store circuit breaker state, for the rest of the
+     * transaction and for the jobs of sendAsync() calls made after it.
      *
      * @param partitionName `String` Qualified partition name, e.g. 'local.Callwise'
      * @throws `CallwiseException` INVALID_REQUEST when the name is not of the form namespace.partition
