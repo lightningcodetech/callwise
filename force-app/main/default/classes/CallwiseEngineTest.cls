@@ -1,6 +1,6 @@
 /**
  * @description Tests for CallwiseEngine.send(): transport-error translation, synchronous retries, idempotency,
- * Retry-After, the limits budget and the circuit breaker.
+ * Retry-After, the limits budget, the circuit breaker and a logger that throws.
  */
 @IsTest(IsParallel=true)
 private class CallwiseEngineTest {
@@ -78,6 +78,38 @@ private class CallwiseEngineTest {
             Assert.fail('Expected CallwiseException');
         } catch (CallwiseException e) {
             Assert.areEqual(new List<String>{ 'attempt=1 failure=TRANSPORT' }, logger.entries, 'Failure logged');
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
+    static void shouldKeepRetryingWhenLoggerThrows() {
+        CallwiseMock mock = new CallwiseMock()
+            .whenRequest('GET', '/a')
+            .thenRespond(503, '')
+            .thenRespond(200, 'ok')
+            .install();
+        Callwise.setLogger(new ThrowingLogger());
+
+        Test.startTest();
+        CallwiseResponse response = Callwise.to(NAMED_CREDENTIAL).get('/a').send();
+        Test.stopTest();
+
+        Assert.areEqual(200, response.getStatusCode(), 'The logger exception does not fail the send');
+        Assert.areEqual(2, mock.countRequests('GET', '/a'), 'The retry still happens');
+    }
+
+    @IsTest
+    static void shouldThrowCalloutFailureWhenLoggerThrows() {
+        new CallwiseMock().whenRequest('GET', '/a').thenThrow('Connection reset').install();
+        Callwise.setLogger(new ThrowingLogger());
+
+        Test.startTest();
+        try {
+            Callwise.to(NAMED_CREDENTIAL).get('/a').retry(CallwiseRetryPolicy.none()).send();
+            Assert.fail('Expected CallwiseException');
+        } catch (CallwiseException e) {
+            Assert.areEqual(CallwiseException.FailureReason.TRANSPORT, e.reason, 'The callout failure is kept');
         }
         Test.stopTest();
     }
@@ -491,6 +523,20 @@ private class CallwiseEngineTest {
         ) {
             String outcome = response != null ? 'status=' + response.getStatusCode() : 'failure=' + failure.reason;
             entries.add('attempt=' + attempt + ' ' + outcome);
+        }
+    }
+
+    /**
+     * @description Logger that throws on every attempt.
+     */
+    private class ThrowingLogger implements Callwise.Logger {
+        public void log(
+            CallwiseRequest request,
+            CallwiseResponse response,
+            CallwiseException failure,
+            Integer attempt
+        ) {
+            throw new IllegalArgumentException('logger failed');
         }
     }
 }
