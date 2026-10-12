@@ -45,7 +45,7 @@ if (res.isSuccess()) {
 | `to(String namedCredential)`                        | Starts a `CallwiseRequest`. The name is the Named Credential API name, without `callout:`.                            |
 | `setLogger(Logger)` / `getLogger()`                 | Transaction-wide logger. `null` restores `NoOpLogger`. Travels to `sendAsync()` jobs if serializable.                 |
 | `setCachePartition(String)` / `getCachePartition()` | Org cache partition for breaker state. Default `local.Callwise`. Travels to `sendAsync()` jobs.                       |
-| `interface Logger`                                  | `log(request, response, failure, attempt)`. Called once per attempt. Must not throw.                                  |
+| `interface Logger`                                  | `log(request, response, failure, attempt)`. Called once per attempt. No DML in `send()`; see [Logging](#logging).     |
 | `interface Callback`                                | `onResponse(request, response)` / `onFailure(request, failure)` for `sendAsync()`. Needs a public no-arg constructor. |
 | `NoOpLogger`                                        | Default. Does nothing.                                                                                                |
 | `DebugLogger`                                       | One `System.debug` line per attempt. `new DebugLogger(LoggingLevel.INFO).includeBodies()` to also log bodies.         |
@@ -116,6 +116,14 @@ Factories: `create(reason, message)`, `create(reason, message, cause)`, `invalid
 ### `CallwiseMock`
 
 See [Testing](#testing).
+
+## Logging
+
+The logger runs right after each callout. In `send()` it must not perform DML: Apex blocks callouts after uncommitted
+DML, so the next retry, and any later callout in the transaction, would fail with `UNCOMMITTED_WORK`. To persist logs, publish a Platform Event with Publish
+Immediately behavior, which does not block later callouts. In `sendAsync()` jobs DML is safe, because each job makes
+one callout before the logger runs. An exception thrown by the logger is written to the debug log as a `WARN` line and
+does not fail the request.
 
 ## Retry semantics
 

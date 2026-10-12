@@ -131,7 +131,7 @@ public inherited sharing class CallwiseEngine {
             calloutMsUsed += System.currentTimeMillis() - attemptStartedAt;
         }
         breaker?.record(outcome.response, outcome.failure);
-        Callwise.getLogger().log(request, outcome.response, outcome.failure, attempt);
+        this.log(request, outcome, attempt);
         return outcome;
     }
 
@@ -171,6 +171,26 @@ public inherited sharing class CallwiseEngine {
             return false;
         }
         return this.hasCalloutLeft() && calloutMsUsed + request.getTimeoutMs() <= MAX_CALLOUT_TIME_MS;
+    }
+
+    /**
+     * @description Passes the attempt to the logger. A logger that throws does not fail the send: the exception is
+     * written to the debug log and the attempt goes on unlogged.
+     *
+     * @param request `CallwiseRequest` Request being sent
+     * @param outcome `Outcome` Response or failure of the attempt
+     * @param attempt `Integer` Attempt number, starting at 1
+     */
+    @SuppressWarnings('PMD.AvoidDebugStatements')
+    private void log(CallwiseRequest request, Outcome outcome, Integer attempt) {
+        try {
+            Callwise.getLogger().log(request, outcome.response, outcome.failure, attempt);
+        } catch (Exception e) {
+            System.debug(
+                LoggingLevel.WARN,
+                '[Callwise] The logger threw ' + e.getTypeName() + ': ' + e.getMessage() + '. Attempt not logged.'
+            );
+        }
     }
 
     /**

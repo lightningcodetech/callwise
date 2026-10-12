@@ -11,6 +11,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   `local.Callwise` and no logger, so with another partition the breaker state of async attempts only lived for one
   transaction, and async attempts were never logged. A logger that cannot be serialized as Queueable state is left
   out, with a `WARN` line in the debug log.
+- An exception thrown by the logger no longer fails `send()` or `sendAsync()`: it is written to the debug log and the
+  attempt goes on unlogged. The docs now say that a logger must not perform DML in `send()`.
 
 ## [0.2.0] - 2026-10-05
 

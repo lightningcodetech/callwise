@@ -84,8 +84,13 @@ public inherited sharing class Callwise {
     }
 
     /**
-     * @description Receives one call per attempt. Implementations must not throw and should not log bodies unless the
-     * subscriber org has decided that is acceptable (bodies often carry PII).
+     * @description Receives one call per attempt, right after its callout. Implementations should not log bodies unless
+     * the subscriber org has decided that is acceptable (bodies often carry PII).
+     *
+     * Must not perform DML in send(): the next retry, and any later callout in the transaction, would fail with
+     * UNCOMMITTED_WORK, because Apex blocks callouts after uncommitted DML. To persist logs, publish a Platform Event
+     * with Publish Immediately behavior. In sendAsync() jobs DML is safe: each job makes one callout, before the logger
+     * runs. An exception thrown by the logger is written to the debug log and does not fail the request.
      */
     public interface Logger {
         /**
